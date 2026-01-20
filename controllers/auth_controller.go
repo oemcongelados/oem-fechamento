@@ -27,7 +27,7 @@ func Login(c *fiber.Ctx) error {
 	}
 
 	collection := Db.Collection("users")
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second) // Aumentado para 10s por segurança
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	// 1. Busca o usuário pelo Username
@@ -46,7 +46,7 @@ func Login(c *fiber.Ctx) error {
 	// 3. Gera o Token JWT
 	claims := jwt.MapClaims{
 		"user":  foundUser.Username,
-		"admin": foundUser.IsAdmin, // CORREÇÃO: "admin" minúsculo (Padrão do sistema)
+		"admin": foundUser.IsAdmin, // O valor aqui vem do struct carregado do banco
 		"exp":   time.Now().Add(time.Hour * 72).Unix(),
 	}
 
@@ -90,12 +90,11 @@ func RegisterUser(c *fiber.Ctx) error {
 	}
 	user.Password = string(hashedPassword)
 
-	// 3. Salva no banco (Força is_admin para garantir a gravação correta)
-	// Se o usuário não enviou o campo, assume false.
+	// 3. Salva no banco (Força is_admin minúsculo)
 	_, err = collection.InsertOne(ctx, bson.M{
 		"username": user.Username,
 		"password": user.Password,
-		"is_admin": user.IsAdmin, // Garante gravação em snake_case
+		"is_admin": user.IsAdmin,
 	})
 
 	if err != nil {
@@ -143,10 +142,10 @@ func UpdateUser(c *fiber.Ctx) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	// Campos a atualizar
+	// Campos a atualizar (Força is_admin minúsculo)
 	updateFields := bson.M{
 		"username": input.Username,
-		"is_admin": input.IsAdmin, // CORREÇÃO: "is_admin" minúsculo para bater com o banco
+		"is_admin": input.IsAdmin,
 	}
 
 	// Só atualiza a senha se foi enviada uma nova
@@ -191,7 +190,7 @@ func EnsureAdminExists() {
 	}
 
 	collection := Db.Collection("users")
-	// Timeout de 30 segundos mantido para garantir conexão com Atlas Gratuito
+	// Timeout generoso de 30s para o Atlas Gratuito acordar
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
@@ -202,25 +201,31 @@ func EnsureAdminExists() {
 		fmt.Println("⚙️  Usuário 'Admin' não encontrado. Criando padrão...")
 		hashedPassword, _ := bcrypt.GenerateFromPassword([]byte("Rota@2026"), 14)
 
-		Admin := models.User{
-			Username: "Admin",
-			Password: string(hashedPassword),
-			IsAdmin:  true,
-		}
+		// Criação forçada com nomes de campo explícitos (snake_case)
+		_, err := collection.InsertOne(ctx, bson.M{
+			"username": "Admin",
+			"password": string(hashedPassword),
+			"is_admin": true, // <--- Aqui está o segredo: minúsculo
+		})
 
-		_, err := collection.InsertOne(ctx, Admin)
 		if err != nil {
 			fmt.Println("❌ Erro ao criar Admin padrão:", err)
 		} else {
 			fmt.Println("✅ Usuário 'Admin' criado com sucesso!")
 		}
 	} else {
-		// Opcional: Se o Admin já existe, força a atualização para garantir que ele seja Admin de verdade
-		// Isso corrige o problema da imagem onde o Admin aparece como "USUÁRIO"
-		if !existingUser.IsAdmin {
-			fmt.Println("ℹ️  Corrigindo permissão do usuário 'Admin'...")
-			collection.UpdateOne(ctx, bson.M{"username": "Admin"}, bson.M{"$set": bson.M{"is_admin": true}})
+		// SE O USUÁRIO JÁ EXISTE: FORÇAR A ATUALIZAÇÃO DA PERMISSÃO
+		// Isso corrige o problema da imagem onde ele aparece como "Usuário"
+		fmt.Println("ℹ️  Usuário 'Admin' detectado. Forçando permissão de administrador...")
+
+		_, err := collection.UpdateOne(ctx, bson.M{"username": "Admin"}, bson.M{
+			"$set": bson.M{"is_admin": true}, // Garante que vira TRUE e usa o campo certo
+		})
+
+		if err != nil {
+			fmt.Println("⚠️ Aviso: Não foi possível atualizar permissão do Admin:", err)
+		} else {
+			fmt.Println("✅ Permissões do Admin verificadas/corrigidas.")
 		}
-		fmt.Println("ℹ️  Usuário 'Admin' verificado e ativo.")
 	}
 }
