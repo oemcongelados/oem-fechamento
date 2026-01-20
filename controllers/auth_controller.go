@@ -102,7 +102,7 @@ func RegisterUser(c *fiber.Ctx) error {
 // --- LISTAR USUÁRIOS ---
 func GetUsers(c *fiber.Ctx) error {
 	collection := Db.Collection("users")
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	var users []models.User
@@ -134,7 +134,7 @@ func UpdateUser(c *fiber.Ctx) error {
 	}
 
 	collection := Db.Collection("users")
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	// Campos a atualizar
@@ -163,7 +163,7 @@ func DeleteUser(c *fiber.Ctx) error {
 	objID, _ := primitive.ObjectIDFromHex(idParam)
 
 	collection := Db.Collection("users")
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), *time.Second)
 	defer cancel()
 
 	result, err := collection.DeleteOne(ctx, bson.M{"_id": objID})
@@ -185,7 +185,7 @@ func EnsureAdminExists() {
 	}
 
 	collection := Db.Collection("users")
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	var existingUser models.User
