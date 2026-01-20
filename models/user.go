@@ -7,5 +7,5 @@ type User struct {
 	Username string             `json:"username" bson:"username"`
 	// O json:"-" faz com que a senha nunca seja enviada nas respostas da API
 	Password string `json:"password,omitempty" bson:"password"`
-	IsAdmin  bool   `json:"is_admin" bson:"is_admin"`
+	IsAdmin  bool   `json:"is_Admin" bson:"is_admin"`
 }
