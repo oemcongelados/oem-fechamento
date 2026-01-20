@@ -74,7 +74,7 @@ func RegisterUser(c *fiber.Ctx) error {
 	}
 
 	collection := Db.Collection("users")
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	// 1. Verifica se usuário já existe
