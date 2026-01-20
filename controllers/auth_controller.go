@@ -163,7 +163,7 @@ func DeleteUser(c *fiber.Ctx) error {
 	objID, _ := primitive.ObjectIDFromHex(idParam)
 
 	collection := Db.Collection("users")
-	ctx, cancel := context.WithTimeout(context.Background(), *time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	result, err := collection.DeleteOne(ctx, bson.M{"_id": objID})
