@@ -27,7 +27,7 @@ func Login(c *fiber.Ctx) error {
 	}
 
 	collection := Db.Collection("users")
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second) // Aumentado para 10s por segurança
 	defer cancel()
 
 	// 1. Busca o usuário pelo Username
@@ -46,7 +46,7 @@ func Login(c *fiber.Ctx) error {
 	// 3. Gera o Token JWT
 	claims := jwt.MapClaims{
 		"user":  foundUser.Username,
-		"Admin": foundUser.IsAdmin, // "admin" minúsculo para padronizar
+		"admin": foundUser.IsAdmin, // CORREÇÃO: "admin" minúsculo (Padrão do sistema)
 		"exp":   time.Now().Add(time.Hour * 72).Unix(),
 	}
 
@@ -90,8 +90,14 @@ func RegisterUser(c *fiber.Ctx) error {
 	}
 	user.Password = string(hashedPassword)
 
-	// 3. Salva no banco
-	_, err = collection.InsertOne(ctx, user)
+	// 3. Salva no banco (Força is_admin para garantir a gravação correta)
+	// Se o usuário não enviou o campo, assume false.
+	_, err = collection.InsertOne(ctx, bson.M{
+		"username": user.Username,
+		"password": user.Password,
+		"is_admin": user.IsAdmin, // Garante gravação em snake_case
+	})
+
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": "Erro ao criar usuário"})
 	}
@@ -140,7 +146,7 @@ func UpdateUser(c *fiber.Ctx) error {
 	// Campos a atualizar
 	updateFields := bson.M{
 		"username": input.Username,
-		"is_Admin": input.IsAdmin,
+		"is_admin": input.IsAdmin, // CORREÇÃO: "is_admin" minúsculo para bater com o banco
 	}
 
 	// Só atualiza a senha se foi enviada uma nova
@@ -185,6 +191,7 @@ func EnsureAdminExists() {
 	}
 
 	collection := Db.Collection("users")
+	// Timeout de 30 segundos mantido para garantir conexão com Atlas Gratuito
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
@@ -208,6 +215,12 @@ func EnsureAdminExists() {
 			fmt.Println("✅ Usuário 'Admin' criado com sucesso!")
 		}
 	} else {
-		fmt.Println("ℹ️  Usuário 'Admin' já existe no banco.")
+		// Opcional: Se o Admin já existe, força a atualização para garantir que ele seja Admin de verdade
+		// Isso corrige o problema da imagem onde o Admin aparece como "USUÁRIO"
+		if !existingUser.IsAdmin {
+			fmt.Println("ℹ️  Corrigindo permissão do usuário 'Admin'...")
+			collection.UpdateOne(ctx, bson.M{"username": "Admin"}, bson.M{"$set": bson.M{"is_admin": true}})
+		}
+		fmt.Println("ℹ️  Usuário 'Admin' verificado e ativo.")
 	}
 }
