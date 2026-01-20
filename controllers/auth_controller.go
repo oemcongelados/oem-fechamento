@@ -16,7 +16,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-// Variável global do banco (injetada pelo main.go)
+// Variável global do banco
 var Db *mongo.Database
 
 // --- LOGIN ---
