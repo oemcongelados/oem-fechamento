@@ -33,9 +33,16 @@ func getUserFromToken(c *fiber.Ctx) (string, bool) {
 
 	username, _ := claims["user"].(string)
 
-	// CORREÇÃO: Verificação robusta do campo admin (aceita bool ou string)
+	// CORREÇÃO: Verifica "admin" (minúsculo) primeiro, que é o novo padrão
 	var isAdmin bool
-	if val, ok := claims["Admin"].(bool); ok {
+
+	// 1. Tenta ler "admin" (minúsculo - padrão atual)
+	if val, ok := claims["admin"].(bool); ok {
+		isAdmin = val
+	} else if val, ok := claims["admin"].(string); ok {
+		isAdmin = (val == "true")
+	} else if val, ok := claims["Admin"].(bool); ok {
+		// 2. Fallback: Tenta ler "Admin" (maiúsculo - tokens antigos)
 		isAdmin = val
 	} else if val, ok := claims["Admin"].(string); ok {
 		isAdmin = (val == "true")
@@ -157,6 +164,7 @@ func UpdateTrip(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": "Dados inválidos"})
 	}
 
+	// Remove campos sensíveis para evitar injeção
 	delete(updateData, "_id")
 	delete(updateData, "created_at")
 	delete(updateData, "user_id")
