@@ -38,6 +38,8 @@ func Login(c *fiber.Ctx) error {
 	}
 
 	// 2. Compara a senha (Hash)
+	// OBS: A velocidade aqui depende de como a senha foi CRIADA.
+	// Se foi criada com custo 14, vai demorar. Se for 10, será rápido.
 	err = bcrypt.CompareHashAndPassword([]byte(foundUser.Password), []byte(input.Password))
 	if err != nil {
 		return c.Status(401).JSON(fiber.Map{"error": "Senha incorreta"})
@@ -46,7 +48,7 @@ func Login(c *fiber.Ctx) error {
 	// 3. Gera o Token JWT
 	claims := jwt.MapClaims{
 		"user":  foundUser.Username,
-		"admin": foundUser.IsAdmin, // O valor aqui vem do struct carregado do banco
+		"admin": foundUser.IsAdmin,
 		"exp":   time.Now().Add(time.Hour * 72).Unix(),
 	}
 
@@ -56,7 +58,6 @@ func Login(c *fiber.Ctx) error {
 		return c.Status(500).JSON(fiber.Map{"error": "Erro ao gerar token"})
 	}
 
-	// 4. Retorna Token e Dados
 	return c.JSON(fiber.Map{
 		"message": "Login realizado com sucesso",
 		"token":   t,
@@ -77,20 +78,18 @@ func RegisterUser(c *fiber.Ctx) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	// 1. Verifica se usuário já existe
 	count, _ := collection.CountDocuments(ctx, bson.M{"username": user.Username})
 	if count > 0 {
 		return c.Status(400).JSON(fiber.Map{"error": "Este nome de usuário já existe"})
 	}
 
-	// 2. Criptografa a senha
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(user.Password), 14)
+	// CORREÇÃO: Alterado de 14 para 10 (Muito mais rápido)
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(user.Password), 10)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": "Erro ao criptografar senha"})
 	}
 	user.Password = string(hashedPassword)
 
-	// 3. Salva no banco (Força is_admin minúsculo)
 	_, err = collection.InsertOne(ctx, bson.M{
 		"username": user.Username,
 		"password": user.Password,
@@ -116,19 +115,15 @@ func GetUsers(c *fiber.Ctx) error {
 		return c.Status(500).JSON(fiber.Map{"error": "Erro ao buscar usuários"})
 	}
 	defer cursor.Close(ctx)
-
-	if err = cursor.All(ctx, &users); err != nil {
-		return c.Status(500).JSON(fiber.Map{"error": "Erro ao processar lista"})
-	}
+	cursor.All(ctx, &users)
 
 	if users == nil {
 		users = []models.User{}
 	}
-
 	return c.JSON(users)
 }
 
-// --- ATUALIZAR USUÁRIO (EDITAR) ---
+// --- ATUALIZAR USUÁRIO ---
 func UpdateUser(c *fiber.Ctx) error {
 	idParam := c.Params("id")
 	objID, _ := primitive.ObjectIDFromHex(idParam)
@@ -142,15 +137,14 @@ func UpdateUser(c *fiber.Ctx) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	// Campos a atualizar (Força is_admin minúsculo)
 	updateFields := bson.M{
 		"username": input.Username,
 		"is_admin": input.IsAdmin,
 	}
 
-	// Só atualiza a senha se foi enviada uma nova
 	if input.Password != "" {
-		hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(input.Password), 14)
+		// CORREÇÃO: Alterado de 14 para 10
+		hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(input.Password), 10)
 		updateFields["password"] = string(hashedPassword)
 	}
 
@@ -183,14 +177,13 @@ func DeleteUser(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"message": "Usuário excluído com sucesso!"})
 }
 
-// --- SEED: GARANTIR QUE ADMIN EXISTE ---
+// --- SEED: ADMIN PADRÃO ---
 func EnsureAdminExists() {
 	if Db == nil {
 		return
 	}
 
 	collection := Db.Collection("users")
-	// Timeout generoso de 30s para o Atlas Gratuito acordar
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
@@ -199,13 +192,14 @@ func EnsureAdminExists() {
 
 	if err == mongo.ErrNoDocuments {
 		fmt.Println("⚙️  Usuário 'Admin' não encontrado. Criando padrão...")
-		hashedPassword, _ := bcrypt.GenerateFromPassword([]byte("Rota@2026"), 14)
 
-		// Criação forçada com nomes de campo explícitos (snake_case)
+		// CORREÇÃO: Alterado de 14 para 10
+		hashedPassword, _ := bcrypt.GenerateFromPassword([]byte("Rota@2026"), 10)
+
 		_, err := collection.InsertOne(ctx, bson.M{
 			"username": "Admin",
 			"password": string(hashedPassword),
-			"is_admin": true, // <--- Aqui está o segredo: minúsculo
+			"is_admin": true,
 		})
 
 		if err != nil {
@@ -214,18 +208,8 @@ func EnsureAdminExists() {
 			fmt.Println("✅ Usuário 'Admin' criado com sucesso!")
 		}
 	} else {
-		// SE O USUÁRIO JÁ EXISTE: FORÇAR A ATUALIZAÇÃO DA PERMISSÃO
-		// Isso corrige o problema da imagem onde ele aparece como "Usuário"
-		fmt.Println("ℹ️  Usuário 'Admin' detectado. Forçando permissão de administrador...")
-
-		_, err := collection.UpdateOne(ctx, bson.M{"username": "Admin"}, bson.M{
-			"$set": bson.M{"is_admin": true}, // Garante que vira TRUE e usa o campo certo
-		})
-
-		if err != nil {
-			fmt.Println("⚠️ Aviso: Não foi possível atualizar permissão do Admin:", err)
-		} else {
-			fmt.Println("✅ Permissões do Admin verificadas/corrigidas.")
-		}
+		// Garante permissão
+		collection.UpdateOne(ctx, bson.M{"username": "Admin"}, bson.M{"$set": bson.M{"is_admin": true}})
+		fmt.Println("ℹ️  Usuário 'Admin' verificado.")
 	}
 }
