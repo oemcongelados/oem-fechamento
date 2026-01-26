@@ -82,6 +82,10 @@ func main() {
 	api.Patch("/trips/:id/reopen", controllers.ReopenTrip)
 	api.Delete("/trips/:id", controllers.DeleteTrip)
 
+	// --- Notificações (NOVO) ---
+	api.Get("/notifications", controllers.CheckNotifications)
+	api.Post("/notifications/dismiss", controllers.DismissNotifications)
+
 	// --- Usuários ---
 	api.Post("/register", controllers.RegisterUser)  // Criar
 	api.Get("/users", controllers.GetUsers)          // Listar

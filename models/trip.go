@@ -7,16 +7,18 @@ import (
 )
 
 type Trip struct {
-	ID        primitive.ObjectID `json:"id,omitempty" bson:"_id,omitempty"`
-	UserID    string             `json:"user_id" bson:"user_id"`
-	Approved  bool               `json:"approved" bson:"approved"`
-	CreatedAt time.Time          `json:"created_at" bson:"created_at"`
+	ID       primitive.ObjectID `json:"id,omitempty" bson:"_id,omitempty"`
+	UserID   string             `json:"user_id" bson:"user_id"`
+	Approved bool               `json:"approved" bson:"approved"`
+
+	// --- NOVO CAMPO: Controle de Notificação ---
+	ApprovalViewed bool `json:"approval_viewed" bson:"approval_viewed"`
+
+	CreatedAt time.Time `json:"created_at" bson:"created_at"`
 
 	Route     string `json:"route" bson:"route"`
 	StartDate string `json:"start_date" bson:"start_date"`
-
-	// Novo campo Data de Chegada
-	EndDate string `json:"end_date" bson:"end_date"`
+	EndDate   string `json:"end_date" bson:"end_date"`
 
 	Driver  string `json:"driver" bson:"driver"`
 	Vehicle string `json:"vehicle" bson:"vehicle"`
@@ -28,7 +30,6 @@ type Trip struct {
 	ValueReceived float64 `json:"value_received" bson:"value_received"`
 	ReturnNotes   string  `json:"return_notes" bson:"return_notes"`
 
-	// CORREÇÃO: Removido o espaço extra em bson:"expense_fuel"
 	ExpenseFuel      float64 `json:"expense_fuel" bson:"expense_fuel"`
 	ExpenseDaily     float64 `json:"expense_daily" bson:"expense_daily"`
 	ExpenseAssistant float64 `json:"expense_assistant" bson:"expense_assistant"`

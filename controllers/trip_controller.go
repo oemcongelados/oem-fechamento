@@ -33,16 +33,14 @@ func getUserFromToken(c *fiber.Ctx) (string, bool) {
 
 	username, _ := claims["user"].(string)
 
-	// CORREÇÃO: Verifica "admin" (minúsculo) primeiro, que é o novo padrão
 	var isAdmin bool
 
-	// 1. Tenta ler "admin" (minúsculo - padrão atual)
+	// Tenta ler "admin" (padrão novo e antigo)
 	if val, ok := claims["admin"].(bool); ok {
 		isAdmin = val
 	} else if val, ok := claims["admin"].(string); ok {
 		isAdmin = (val == "true")
 	} else if val, ok := claims["Admin"].(bool); ok {
-		// 2. Fallback: Tenta ler "Admin" (maiúsculo - tokens antigos)
 		isAdmin = val
 	} else if val, ok := claims["Admin"].(string); ok {
 		isAdmin = (val == "true")
@@ -58,15 +56,12 @@ func GetAllTrips(c *fiber.Ctx) error {
 
 	username, isAdmin := getUserFromToken(c)
 
-	// Se não conseguiu identificar o usuário, retorna erro
 	if username == "" && !isAdmin {
 		return c.Status(401).JSON(fiber.Map{"error": "Usuário não identificado"})
 	}
 
 	filter := bson.M{}
 
-	// SE NÃO FOR ADMIN, filtra apenas pelas viagens DELE
-	// SE FOR ADMIN, o filtro continua vazio ({}) e retorna tudo.
 	if !isAdmin {
 		filter = bson.M{"user_id": username}
 	}
@@ -125,6 +120,7 @@ func CreateTrip(c *fiber.Ctx) error {
 	trip.CreatedAt = time.Now()
 	trip.UserID = username
 	trip.Approved = false
+	// Por padrão, approval_viewed será false na criação, o que está correto
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -148,7 +144,6 @@ func UpdateTrip(c *fiber.Ctx) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	// Verifica se já está aprovada
 	var existingTrip models.Trip
 	err = Db.Collection("trips").FindOne(ctx, bson.M{"_id": objID}).Decode(&existingTrip)
 	if err != nil {
@@ -164,11 +159,12 @@ func UpdateTrip(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": "Dados inválidos"})
 	}
 
-	// Remove campos sensíveis para evitar injeção
+	// Proteção de campos
 	delete(updateData, "_id")
 	delete(updateData, "created_at")
 	delete(updateData, "user_id")
 	delete(updateData, "approved")
+	delete(updateData, "approval_viewed") // Usuário não pode mudar isso manualmente
 
 	username, isAdmin := getUserFromToken(c)
 
@@ -206,7 +202,12 @@ func ApproveTrip(c *fiber.Ctx) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	update := bson.M{"$set": bson.M{"approved": true}}
+	// MODIFICAÇÃO IMPORTANTE:
+	// Define 'approval_viewed' como false para disparar a notificação
+	update := bson.M{"$set": bson.M{
+		"approved":        true,
+		"approval_viewed": false,
+	}}
 
 	result, err := Db.Collection("trips").UpdateOne(ctx, bson.M{"_id": objID}, update)
 	if err != nil {
@@ -276,4 +277,63 @@ func DeleteTrip(c *fiber.Ctx) error {
 	}
 
 	return c.JSON(fiber.Map{"message": "Viagem excluída com sucesso!"})
+}
+
+// --- (NOVO) CHECAR NOTIFICAÇÕES ---
+func CheckNotifications(c *fiber.Ctx) error {
+	username, _ := getUserFromToken(c)
+	if username == "" {
+		return c.Status(401).JSON(fiber.Map{"error": "Auth Error"})
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Filtro: Viagens deste usuário, que estão Aprovadas, e onde approval_viewed NÃO é true
+	filter := bson.M{
+		"user_id":         username,
+		"approved":        true,
+		"approval_viewed": bson.M{"$ne": true}, // Pega false ou null
+	}
+
+	// Traz apenas campos necessários para o alerta
+	opts := options.Find().SetProjection(bson.M{"_id": 1, "start_date": 1, "route": 1})
+
+	var trips []models.Trip
+	cursor, err := Db.Collection("trips").Find(ctx, filter, opts)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Erro ao buscar notificações"})
+	}
+
+	cursor.All(ctx, &trips)
+	if trips == nil {
+		trips = []models.Trip{}
+	}
+
+	return c.JSON(trips)
+}
+
+// --- (NOVO) MARCAR NOTIFICAÇÕES COMO LIDAS ---
+func DismissNotifications(c *fiber.Ctx) error {
+	username, _ := getUserFromToken(c)
+	if username == "" {
+		return c.Status(401).JSON(fiber.Map{"error": "Auth Error"})
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Filtro: Atualiza todas as viagens aprovadas do usuário para viewed = true
+	filter := bson.M{
+		"user_id":  username,
+		"approved": true,
+	}
+	update := bson.M{"$set": bson.M{"approval_viewed": true}}
+
+	_, err := Db.Collection("trips").UpdateMany(ctx, filter, update)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Erro ao limpar notificações"})
+	}
+
+	return c.JSON(fiber.Map{"message": "Notificações limpas"})
 }
