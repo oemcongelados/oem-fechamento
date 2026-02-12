@@ -7,9 +7,8 @@ const TripClosing = () => {
   const { id } = useParams();
   const isEditMode = !!id;
 
-  // --- ALTERAÇÃO: Adicionado 'romaneio' nos dados iniciais ---
   const initialData = {
-    romaneio: '', // Campo novo
+    romaneio: '',
     route: '', start_date: '', end_date: '', driver: '', vehicle: '',
     km_start: '', km_end: '', value_withdraw: '', value_received: '', return_notes: '',
     expense_fuel: '', expense_daily: '', expense_assistant: '', expense_toll: '', expense_other: ''
@@ -136,7 +135,9 @@ const TripClosing = () => {
       if (response.ok) {
         if (!isEditMode) localStorage.removeItem('oem_trip_draft');
         
-        setStatus({ type: 'success', msg: 'Fechamento Salvo!' });
+        // --- ATUALIZADO: Mensagem solicitada e Scroll para o topo ---
+        setStatus({ type: 'success', msg: 'Lançamento Salvo!' });
+        window.scrollTo(0, 0); // Garante que o usuário veja a mensagem
         
         const tripId = isEditMode ? id : data.id;
         
@@ -146,18 +147,21 @@ const TripClosing = () => {
         
       } else {
         setStatus({ type: 'error', msg: data.error || 'Erro ao salvar dados.' });
+        window.scrollTo(0, 0);
       }
     } catch (error) {
       console.error("Erro no envio:", error);
       setStatus({ type: 'error', msg: 'Erro de conexão.' });
+      window.scrollTo(0, 0);
     }
   };
 
-  // Helper para definir cor da mensagem
+  // --- CORES DA MENSAGEM (Já configuradas para Verde/Verde no Success) ---
   const getStatusColor = (type) => {
       if (type === 'error') return { bg: '#fee2e2', text: '#991b1b' }; // Vermelho
-      if (type === 'success') return { bg: '#dcfce7', text: '#166534' }; // Verde
-      return { bg: '#e0f2fe', text: '#075985' }; // Azul (loading/info)
+      // SUCESSO: Fundo Verde Claro (#dcfce7) e Texto Verde Escuro (#166534)
+      if (type === 'success') return { bg: '#dcfce7', text: '#166534' }; 
+      return { bg: '#e0f2fe', text: '#075985' }; // Azul (loading)
   };
 
   const statusStyle = getStatusColor(status.type);
@@ -170,6 +174,7 @@ const TripClosing = () => {
           <p>{isEditMode ? `Editando registro ID: ${id}` : 'Preencha os dados abaixo ao finalizar a rota.'}</p>
         </div>
 
+        {/* --- CAIXA DE MENSAGEM --- */}
         {status.msg && (
           <div style={{
             padding: '15px', 
@@ -177,6 +182,7 @@ const TripClosing = () => {
             borderRadius: '8px', 
             textAlign: 'center', 
             fontWeight: 'bold',
+            border: `1px solid ${statusStyle.text}`, // Adicionei borda sutil para destaque
             backgroundColor: statusStyle.bg,
             color: statusStyle.text
           }}>
@@ -202,7 +208,7 @@ const TripClosing = () => {
               </div>
             </div>
 
-            {/* --- NOVO: CAMPO DE ROMANEIO (Se houver necessidade de editar) --- */}
+            {/* CAMPO DE ROMANEIO */}
             <div className="form-grid" style={{marginTop: '16px'}}>
                <div style={{gridColumn: '1 / -1'}}>
                  <label>Romaneio (Opcional)</label>
@@ -326,7 +332,7 @@ const TripClosing = () => {
 
           <div style={{display:'flex', gap:'10px'}}>
              <button type="submit" className="btn btn-primary" style={{flex: 1, padding: '18px', fontSize: '1.1rem'}}>
-                {isEditMode ? 'SALVAR ALTERAÇÕES' : 'ENVIAR FECHAMENTO'}
+                {isEditMode ? 'SALVAR ALTERAÇÕES' : 'ENVIAR LANÇAMENTO'}
              </button>
              {isEditMode && (
                 <button type="button" className="btn btn-secondary" onClick={() => navigate('/search')} style={{padding: '18px'}}>
