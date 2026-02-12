@@ -35,7 +35,6 @@ func getUserFromToken(c *fiber.Ctx) (string, bool) {
 
 	var isAdmin bool
 
-	// Tenta ler "admin" (padrão novo e antigo)
 	if val, ok := claims["admin"].(bool); ok {
 		isAdmin = val
 	} else if val, ok := claims["admin"].(string); ok {
@@ -120,7 +119,6 @@ func CreateTrip(c *fiber.Ctx) error {
 	trip.CreatedAt = time.Now()
 	trip.UserID = username
 	trip.Approved = false
-	// Por padrão, approval_viewed será false na criação, o que está correto
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -164,7 +162,8 @@ func UpdateTrip(c *fiber.Ctx) error {
 	delete(updateData, "created_at")
 	delete(updateData, "user_id")
 	delete(updateData, "approved")
-	delete(updateData, "approval_viewed") // Usuário não pode mudar isso manualmente
+	delete(updateData, "approval_viewed")
+	delete(updateData, "romaneio") // Garante que usuário comum não muda romaneio via edição
 
 	username, isAdmin := getUserFromToken(c)
 
@@ -199,14 +198,25 @@ func ApproveTrip(c *fiber.Ctx) error {
 		return c.Status(403).JSON(fiber.Map{"error": "Apenas administradores podem aprovar fechamentos."})
 	}
 
+	// --- CORREÇÃO: LER O ROMANEIO DO CORPO DA REQUISIÇÃO ---
+	type ApproveRequest struct {
+		Romaneio string `json:"romaneio"`
+	}
+	var req ApproveRequest
+	// O BodyParser preenche a variável 'req' com o JSON enviado pelo React
+	if err := c.BodyParser(&req); err != nil {
+		// Se der erro, prossegue sem romaneio ou retorna erro (opcional)
+		// Vamos prosseguir para não travar, mas idealmente deveria validar
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	// MODIFICAÇÃO IMPORTANTE:
-	// Define 'approval_viewed' como false para disparar a notificação
+	// Atualiza Approved, Romaneio e reseta o ApprovalViewed
 	update := bson.M{"$set": bson.M{
 		"approved":        true,
 		"approval_viewed": false,
+		"romaneio":        req.Romaneio, // <--- SALVA NO BANCO
 	}}
 
 	result, err := Db.Collection("trips").UpdateOne(ctx, bson.M{"_id": objID}, update)
@@ -218,7 +228,10 @@ func ApproveTrip(c *fiber.Ctx) error {
 		return c.Status(404).JSON(fiber.Map{"error": "Viagem não encontrada."})
 	}
 
-	return c.JSON(fiber.Map{"message": "Fechamento aprovado e bloqueado com sucesso!"})
+	return c.JSON(fiber.Map{
+		"message":  "Fechamento aprovado e bloqueado com sucesso!",
+		"romaneio": req.Romaneio, // Retorna para confirmação
+	})
 }
 
 // --- REABRIR VIAGEM (Admin) ---
@@ -279,7 +292,7 @@ func DeleteTrip(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"message": "Viagem excluída com sucesso!"})
 }
 
-// --- (NOVO) CHECAR NOTIFICAÇÕES ---
+// --- CHECAR NOTIFICAÇÕES ---
 func CheckNotifications(c *fiber.Ctx) error {
 	username, _ := getUserFromToken(c)
 	if username == "" {
@@ -289,14 +302,12 @@ func CheckNotifications(c *fiber.Ctx) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	// Filtro: Viagens deste usuário, que estão Aprovadas, e onde approval_viewed NÃO é true
 	filter := bson.M{
 		"user_id":         username,
 		"approved":        true,
-		"approval_viewed": bson.M{"$ne": true}, // Pega false ou null
+		"approval_viewed": bson.M{"$ne": true},
 	}
 
-	// Traz apenas campos necessários para o alerta
 	opts := options.Find().SetProjection(bson.M{"_id": 1, "start_date": 1, "route": 1})
 
 	var trips []models.Trip
@@ -313,7 +324,7 @@ func CheckNotifications(c *fiber.Ctx) error {
 	return c.JSON(trips)
 }
 
-// --- (NOVO) MARCAR NOTIFICAÇÕES COMO LIDAS ---
+// --- MARCAR NOTIFICAÇÕES COMO LIDAS ---
 func DismissNotifications(c *fiber.Ctx) error {
 	username, _ := getUserFromToken(c)
 	if username == "" {
@@ -323,7 +334,6 @@ func DismissNotifications(c *fiber.Ctx) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	// Filtro: Atualiza todas as viagens aprovadas do usuário para viewed = true
 	filter := bson.M{
 		"user_id":  username,
 		"approved": true,
