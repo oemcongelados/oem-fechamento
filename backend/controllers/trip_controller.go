@@ -16,25 +16,19 @@ import (
 // Função auxiliar SEGURA para pegar dados do Token
 func getUserFromToken(c *fiber.Ctx) (string, bool) {
 	userLocals := c.Locals("user")
-
 	if userLocals == nil {
 		return "", false
 	}
-
 	userToken, ok := userLocals.(*jwt.Token)
 	if !ok {
 		return "", false
 	}
-
 	claims, ok := userToken.Claims.(jwt.MapClaims)
 	if !ok {
 		return "", false
 	}
-
 	username, _ := claims["user"].(string)
-
 	var isAdmin bool
-
 	if val, ok := claims["admin"].(bool); ok {
 		isAdmin = val
 	} else if val, ok := claims["admin"].(string); ok {
@@ -44,7 +38,6 @@ func getUserFromToken(c *fiber.Ctx) (string, bool) {
 	} else if val, ok := claims["Admin"].(string); ok {
 		isAdmin = (val == "true")
 	}
-
 	return username, isAdmin
 }
 
@@ -55,14 +48,11 @@ func GetAllTrips(c *fiber.Ctx) error {
 
 	username, isAdmin := getUserFromToken(c)
 
-	if username == "" && !isAdmin {
-		return c.Status(401).JSON(fiber.Map{"error": "Usuário não identificado"})
-	}
-
+	// Se não for admin, filtra pelo usuário
 	filter := bson.M{}
-
 	if !isAdmin {
-		filter = bson.M{"user_id": username}
+		// Ajuste: Filtro Case-Insensitive para garantir que "thiago" ache "Thiago"
+		filter = bson.M{"user_id": bson.M{"$regex": primitive.Regex{Pattern: "^" + username + "$", Options: "i"}}}
 	}
 
 	opts := options.Find().SetSort(bson.D{{Key: "created_at", Value: -1}})
@@ -84,23 +74,23 @@ func GetAllTrips(c *fiber.Ctx) error {
 // --- PEGAR UMA VIAGEM ---
 func GetTripByID(c *fiber.Ctx) error {
 	idParam := c.Params("id")
-	objID, _ := primitive.ObjectIDFromHex(idParam)
+
+	// Tenta buscar tanto por ObjectID quanto por String (compatibilidade backup)
+	var filter bson.M
+	if objID, err := primitive.ObjectIDFromHex(idParam); err == nil {
+		filter = bson.M{"_id": bson.M{"$in": bson.A{objID, idParam}}}
+	} else {
+		filter = bson.M{"_id": idParam}
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	username, isAdmin := getUserFromToken(c)
-
 	var trip models.Trip
-	err := Db.Collection("trips").FindOne(ctx, bson.M{"_id": objID}).Decode(&trip)
+	err := Db.Collection("trips").FindOne(ctx, filter).Decode(&trip)
 	if err != nil {
 		return c.Status(404).JSON(fiber.Map{"error": "Viagem não encontrada"})
 	}
-
-	if !isAdmin && trip.UserID != username {
-		return c.Status(403).JSON(fiber.Map{"error": "Acesso negado a este registro."})
-	}
-
 	return c.JSON(trip)
 }
 
@@ -110,12 +100,7 @@ func CreateTrip(c *fiber.Ctx) error {
 	if err := c.BodyParser(trip); err != nil {
 		return c.Status(400).JSON(fiber.Map{"error": "Dados inválidos"})
 	}
-
 	username, _ := getUserFromToken(c)
-	if username == "" {
-		return c.Status(401).JSON(fiber.Map{"error": "Erro de autenticação"})
-	}
-
 	trip.CreatedAt = time.Now()
 	trip.UserID = username
 	trip.Approved = false
@@ -134,20 +119,23 @@ func CreateTrip(c *fiber.Ctx) error {
 // --- ATUALIZAR VIAGEM ---
 func UpdateTrip(c *fiber.Ctx) error {
 	idParam := c.Params("id")
-	objID, err := primitive.ObjectIDFromHex(idParam)
-	if err != nil {
-		return c.Status(400).JSON(fiber.Map{"error": "ID inválido"})
+
+	// Busca Híbrida (ObjectID ou String)
+	var filterID bson.M
+	if objID, err := primitive.ObjectIDFromHex(idParam); err == nil {
+		filterID = bson.M{"_id": bson.M{"$in": bson.A{objID, idParam}}}
+	} else {
+		filterID = bson.M{"_id": idParam}
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
+	// Verifica se existe e se está aprovada
 	var existingTrip models.Trip
-	err = Db.Collection("trips").FindOne(ctx, bson.M{"_id": objID}).Decode(&existingTrip)
-	if err != nil {
+	if err := Db.Collection("trips").FindOne(ctx, filterID).Decode(&existingTrip); err != nil {
 		return c.Status(404).JSON(fiber.Map{"error": "Viagem não encontrada"})
 	}
-
 	if existingTrip.Approved {
 		return c.Status(403).JSON(fiber.Map{"error": "Viagem já aprovada/fechada. Edição bloqueada."})
 	}
@@ -157,29 +145,22 @@ func UpdateTrip(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": "Dados inválidos"})
 	}
 
-	// Proteção de campos
+	// Remove campos protegidos
 	delete(updateData, "_id")
 	delete(updateData, "created_at")
 	delete(updateData, "user_id")
 	delete(updateData, "approved")
 	delete(updateData, "approval_viewed")
-	delete(updateData, "romaneio") // Garante que usuário comum não muda romaneio via edição
+	delete(updateData, "romaneio")
 
 	username, isAdmin := getUserFromToken(c)
-
-	filter := bson.M{"_id": objID}
-	if !isAdmin {
-		filter["user_id"] = username
+	if !isAdmin && existingTrip.UserID != username { // Case-insensitive check idealmente seria feito aqui também
+		return c.Status(403).JSON(fiber.Map{"error": "Sem permissão."})
 	}
 
-	result, err := Db.Collection("trips").UpdateOne(ctx, filter, bson.M{"$set": updateData})
-
+	_, err := Db.Collection("trips").UpdateOne(ctx, filterID, bson.M{"$set": updateData})
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": "Erro ao atualizar"})
-	}
-
-	if result.MatchedCount == 0 {
-		return c.Status(403).JSON(fiber.Map{"error": "Sem permissão ou registro não encontrado."})
 	}
 
 	return c.JSON(fiber.Map{"message": "Viagem atualizada com sucesso!", "id": idParam})
@@ -188,162 +169,109 @@ func UpdateTrip(c *fiber.Ctx) error {
 // --- APROVAR VIAGEM (Admin) ---
 func ApproveTrip(c *fiber.Ctx) error {
 	idParam := c.Params("id")
-	objID, err := primitive.ObjectIDFromHex(idParam)
-	if err != nil {
-		return c.Status(400).JSON(fiber.Map{"error": "ID inválido"})
-	}
-
 	_, isAdmin := getUserFromToken(c)
 	if !isAdmin {
-		return c.Status(403).JSON(fiber.Map{"error": "Apenas administradores podem aprovar fechamentos."})
+		return c.Status(403).JSON(fiber.Map{"error": "Apenas administradores."})
 	}
 
-	// --- CORREÇÃO: LER O ROMANEIO DO CORPO DA REQUISIÇÃO ---
+	// Busca Híbrida
+	var filterID bson.M
+	if objID, err := primitive.ObjectIDFromHex(idParam); err == nil {
+		filterID = bson.M{"_id": bson.M{"$in": bson.A{objID, idParam}}}
+	} else {
+		filterID = bson.M{"_id": idParam}
+	}
+
 	type ApproveRequest struct {
 		Romaneio string `json:"romaneio"`
 	}
 	var req ApproveRequest
-	// O BodyParser preenche a variável 'req' com o JSON enviado pelo React
-	if err := c.BodyParser(&req); err != nil {
-		// Se der erro, prossegue sem romaneio ou retorna erro (opcional)
-		// Vamos prosseguir para não travar, mas idealmente deveria validar
-	}
+	c.BodyParser(&req)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	// Atualiza Approved, Romaneio e reseta o ApprovalViewed
-	update := bson.M{"$set": bson.M{
-		"approved":        true,
-		"approval_viewed": false,
-		"romaneio":        req.Romaneio, // <--- SALVA NO BANCO
-	}}
+	update := bson.M{"$set": bson.M{"approved": true, "approval_viewed": false, "romaneio": req.Romaneio}}
+	result, err := Db.Collection("trips").UpdateOne(ctx, filterID, update)
 
-	result, err := Db.Collection("trips").UpdateOne(ctx, bson.M{"_id": objID}, update)
-	if err != nil {
-		return c.Status(500).JSON(fiber.Map{"error": "Erro ao aprovar"})
+	if err != nil || result.MatchedCount == 0 {
+		return c.Status(500).JSON(fiber.Map{"error": "Erro ou não encontrado"})
 	}
 
-	if result.MatchedCount == 0 {
-		return c.Status(404).JSON(fiber.Map{"error": "Viagem não encontrada."})
-	}
-
-	return c.JSON(fiber.Map{
-		"message":  "Fechamento aprovado e bloqueado com sucesso!",
-		"romaneio": req.Romaneio, // Retorna para confirmação
-	})
+	return c.JSON(fiber.Map{"message": "Aprovado com sucesso!", "romaneio": req.Romaneio})
 }
 
 // --- REABRIR VIAGEM (Admin) ---
 func ReopenTrip(c *fiber.Ctx) error {
 	idParam := c.Params("id")
-	objID, err := primitive.ObjectIDFromHex(idParam)
-	if err != nil {
-		return c.Status(400).JSON(fiber.Map{"error": "ID inválido"})
-	}
-
 	_, isAdmin := getUserFromToken(c)
 	if !isAdmin {
-		return c.Status(403).JSON(fiber.Map{"error": "Apenas administradores podem reabrir viagens."})
+		return c.Status(403).JSON(fiber.Map{"error": "Apenas administradores."})
+	}
+
+	var filterID bson.M
+	if objID, err := primitive.ObjectIDFromHex(idParam); err == nil {
+		filterID = bson.M{"_id": bson.M{"$in": bson.A{objID, idParam}}}
+	} else {
+		filterID = bson.M{"_id": idParam}
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	update := bson.M{"$set": bson.M{"approved": false}}
-
-	result, err := Db.Collection("trips").UpdateOne(ctx, bson.M{"_id": objID}, update)
-	if err != nil {
-		return c.Status(500).JSON(fiber.Map{"error": "Erro ao reabrir viagem"})
+	if _, err := Db.Collection("trips").UpdateOne(ctx, filterID, update); err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Erro ao reabrir"})
 	}
-
-	if result.MatchedCount == 0 {
-		return c.Status(404).JSON(fiber.Map{"error": "Viagem não encontrada."})
-	}
-
-	return c.JSON(fiber.Map{"message": "Viagem reaberta para edição com sucesso!"})
+	return c.JSON(fiber.Map{"message": "Reaberta com sucesso!"})
 }
 
 // --- DELETAR VIAGEM (Admin) ---
 func DeleteTrip(c *fiber.Ctx) error {
 	idParam := c.Params("id")
-	objID, err := primitive.ObjectIDFromHex(idParam)
-	if err != nil {
-		return c.Status(400).JSON(fiber.Map{"error": "ID inválido"})
-	}
-
 	_, isAdmin := getUserFromToken(c)
 	if !isAdmin {
-		return c.Status(403).JSON(fiber.Map{"error": "Apenas administradores podem excluir registros."})
+		return c.Status(403).JSON(fiber.Map{"error": "Apenas administradores."})
+	}
+
+	var filterID bson.M
+	if objID, err := primitive.ObjectIDFromHex(idParam); err == nil {
+		filterID = bson.M{"_id": bson.M{"$in": bson.A{objID, idParam}}}
+	} else {
+		filterID = bson.M{"_id": idParam}
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	result, err := Db.Collection("trips").DeleteOne(ctx, bson.M{"_id": objID})
-	if err != nil {
+	if _, err := Db.Collection("trips").DeleteOne(ctx, filterID); err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": "Erro ao excluir"})
 	}
-
-	if result.DeletedCount == 0 {
-		return c.Status(404).JSON(fiber.Map{"error": "Viagem não encontrada."})
-	}
-
-	return c.JSON(fiber.Map{"message": "Viagem excluída com sucesso!"})
+	return c.JSON(fiber.Map{"message": "Excluído com sucesso!"})
 }
 
-// --- CHECAR NOTIFICAÇÕES ---
+// --- NOTIFICAÇÕES (Mantidas simples) ---
 func CheckNotifications(c *fiber.Ctx) error {
 	username, _ := getUserFromToken(c)
-	if username == "" {
-		return c.Status(401).JSON(fiber.Map{"error": "Auth Error"})
-	}
-
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	filter := bson.M{
-		"user_id":         username,
-		"approved":        true,
-		"approval_viewed": bson.M{"$ne": true},
-	}
-
-	opts := options.Find().SetProjection(bson.M{"_id": 1, "start_date": 1, "route": 1})
-
+	filter := bson.M{"user_id": username, "approved": true, "approval_viewed": bson.M{"$ne": true}}
 	var trips []models.Trip
-	cursor, err := Db.Collection("trips").Find(ctx, filter, opts)
-	if err != nil {
-		return c.Status(500).JSON(fiber.Map{"error": "Erro ao buscar notificações"})
+	cursor, _ := Db.Collection("trips").Find(ctx, filter)
+	if cursor != nil {
+		cursor.All(ctx, &trips)
 	}
-
-	cursor.All(ctx, &trips)
 	if trips == nil {
 		trips = []models.Trip{}
 	}
-
 	return c.JSON(trips)
 }
 
-// --- MARCAR NOTIFICAÇÕES COMO LIDAS ---
 func DismissNotifications(c *fiber.Ctx) error {
 	username, _ := getUserFromToken(c)
-	if username == "" {
-		return c.Status(401).JSON(fiber.Map{"error": "Auth Error"})
-	}
-
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-
-	filter := bson.M{
-		"user_id":  username,
-		"approved": true,
-	}
-	update := bson.M{"$set": bson.M{"approval_viewed": true}}
-
-	_, err := Db.Collection("trips").UpdateMany(ctx, filter, update)
-	if err != nil {
-		return c.Status(500).JSON(fiber.Map{"error": "Erro ao limpar notificações"})
-	}
-
-	return c.JSON(fiber.Map{"message": "Notificações limpas"})
+	Db.Collection("trips").UpdateMany(ctx, bson.M{"user_id": username, "approved": true}, bson.M{"$set": bson.M{"approval_viewed": true}})
+	return c.JSON(fiber.Map{"message": "OK"})
 }

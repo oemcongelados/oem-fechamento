@@ -2,21 +2,22 @@ package models
 
 import (
 	"time"
-
-	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 type Trip struct {
-	ID        primitive.ObjectID `json:"id,omitempty" bson:"_id,omitempty"`
-	UserID    string             `json:"user_id" bson:"user_id"`
-	CreatedAt time.Time          `json:"created_at" bson:"created_at"`
+	// ID agora aceita tanto ObjectID quanto String (para compatibilidade com backup)
+	ID        interface{} `json:"id,omitempty" bson:"_id,omitempty"`
+	UserID    string      `json:"user_id" bson:"user_id"`
+	CreatedAt time.Time   `json:"created_at" bson:"created_at"`
 
 	// Campos da Viagem
-	Driver    string    `json:"driver" bson:"driver"`
-	Vehicle   string    `json:"vehicle" bson:"vehicle"`
-	Route     string    `json:"route" bson:"route"`
-	StartDate time.Time `json:"start_date" bson:"start_date"`
-	EndDate   time.Time `json:"end_date" bson:"end_date"`
+	Driver  string `json:"driver" bson:"driver"`
+	Vehicle string `json:"vehicle" bson:"vehicle"`
+	Route   string `json:"route" bson:"route"`
+
+	// Datas agora são strings para evitar erro de leitura do backup
+	StartDate string `json:"start_date" bson:"start_date"`
+	EndDate   string `json:"end_date" bson:"end_date"`
 
 	// Financeiro
 	KmStart       float64 `json:"km_start" bson:"km_start"`
@@ -36,7 +37,5 @@ type Trip struct {
 	ReturnNotes    string `json:"return_notes" bson:"return_notes"`
 	Approved       bool   `json:"approved" bson:"approved"`
 	ApprovalViewed bool   `json:"approval_viewed" bson:"approval_viewed"`
-
-	// --- CAMPO CRUCIAL QUE FALTAVA ---
-	Romaneio string `json:"romaneio" bson:"romaneio"`
+	Romaneio       string `json:"romaneio" bson:"romaneio"`
 }
