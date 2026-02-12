@@ -4,10 +4,20 @@ import Layout from '../components/Layout';
 const BackupRestore = () => {
   const [msg, setMsg] = useState({ type: '', text: '' });
   const [loading, setLoading] = useState(false);
+  const [progress, setProgress] = useState(0); // Estado para a barra
 
   // --- DOWNLOAD ---
   const handleDownload = async () => {
     const token = localStorage.getItem('oem_token');
+    setLoading(true);
+    setMsg({ type: 'loading', text: 'Gerando backup e enviando por e-mail...' });
+    setProgress(10); // Inicia barra
+
+    // Simula progresso enquanto aguarda o servidor (que pode demorar enviando e-mail)
+    const interval = setInterval(() => {
+        setProgress((prev) => (prev < 90 ? prev + 10 : prev));
+    }, 500);
+
     try {
         const response = await fetch(`${import.meta.env.VITE_API_URL}/api/backup`, {
             headers: { 'Authorization': `Bearer ${token}` }
@@ -15,22 +25,37 @@ const BackupRestore = () => {
         
         if (!response.ok) throw new Error('Erro ao gerar backup');
 
-        // Cria um link invisível para forçar o download do BLOB
+        clearInterval(interval);
+        setProgress(100); // Completa a barra
+
+        // Verifica cabeçalho customizado do Backend sobre o envio de e-mail
+        const emailStatus = response.headers.get("X-Email-Status");
+        const emailMsg = emailStatus === 'sent' 
+            ? '✅ Cópia enviada para backup@oemcontelados.com.br' 
+            : '⚠️ Falha ao enviar e-mail (apenas download local)';
+
+        // Download do arquivo
         const blob = await response.blob();
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        // Pega data atual para nome do arquivo
         const date = new Date().toISOString().slice(0,10);
         a.download = `backup_oem_${date}.json`;
         document.body.appendChild(a);
         a.click();
         a.remove();
-        setMsg({ type: 'success', text: 'Backup baixado com sucesso!' });
+
+        setMsg({ type: 'success', text: `Backup baixado com sucesso! \n${emailMsg}` });
+
     } catch (error) {
-        // CORREÇÃO: Usamos a variável error para logar no console
+        clearInterval(interval);
+        setProgress(0);
         console.error("Erro no download:", error);
-        setMsg({ type: 'error', text: 'Falha ao baixar backup.' });
+        setMsg({ type: 'error', text: 'Falha ao processar backup.' });
+    } finally {
+        setLoading(false);
+        // Reseta barra após 3 segundos
+        setTimeout(() => setProgress(0), 3000);
     }
   };
 
@@ -70,7 +95,6 @@ const BackupRestore = () => {
             setMsg({ type: 'error', text: data.error || 'Erro ao restaurar.' });
         }
     } catch (error) {
-        // CORREÇÃO: Usamos a variável error para logar no console
         console.error("Erro na restauração:", error);
         setMsg({ type: 'error', text: 'Erro de conexão.' });
     } finally {
@@ -81,13 +105,36 @@ const BackupRestore = () => {
   return (
     <Layout title="Backup & Restauração">
       
-      {/* Mensagens */}
+      {/* BARRA DE STATUS / PROGRESSO */}
+      {loading && (
+          <div style={{marginBottom: '20px'}}>
+              <div style={{
+                  width: '100%', 
+                  height: '20px', 
+                  backgroundColor: '#e5e7eb', 
+                  borderRadius: '10px',
+                  overflow: 'hidden'
+              }}>
+                  <div style={{
+                      width: `${progress}%`, 
+                      height: '100%', 
+                      backgroundColor: '#3b82f6', 
+                      transition: 'width 0.5s ease-in-out'
+                  }}></div>
+              </div>
+              <div style={{textAlign: 'center', fontSize: '0.9rem', color: '#666', marginTop: '5px'}}>
+                  Processando: {progress}%
+              </div>
+          </div>
+      )}
+
+      {/* MENSAGENS */}
       {msg.text && (
           <div style={{
             padding: '15px', marginBottom: '20px', borderRadius: '8px',
             backgroundColor: msg.type === 'success' ? '#dcfce7' : msg.type === 'error' ? '#fee2e2' : '#e0f2fe',
             color: msg.type === 'success' ? '#166534' : msg.type === 'error' ? '#991b1b' : '#075985',
-            fontWeight: 'bold', textAlign: 'center'
+            fontWeight: 'bold', textAlign: 'center', whiteSpace: 'pre-line'
           }}>
             {msg.text}
           </div>
@@ -99,10 +146,10 @@ const BackupRestore = () => {
         <div className="card" style={{textAlign: 'center'}}>
             <h3 style={{color: '#2563eb'}}>📥 Fazer Backup</h3>
             <p style={{marginBottom: '20px'}}>
-                Baixe uma cópia completa de todos os dados do sistema (usuários, viagens, cadastros) para o seu computador.
+                Baixe uma cópia dos dados e envie automaticamente para o e-mail de segurança.
             </p>
-            <button onClick={handleDownload} className="btn btn-primary">
-                BAIXAR ARQUIVO .JSON
+            <button onClick={handleDownload} className="btn btn-primary" disabled={loading}>
+                {loading ? 'AGUARDE...' : 'BAIXAR & ENVIAR POR E-MAIL'}
             </button>
         </div>
 

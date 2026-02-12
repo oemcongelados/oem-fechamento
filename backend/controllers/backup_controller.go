@@ -57,31 +57,40 @@ func performAutomaticBackup() {
 	}
 
 	log.Println("✅ Backup automático salvo:", filepath)
-	sendBackupEmail(filepath)
+
+	// Tenta enviar e-mail (ignora erro no automático para não travar log)
+	if err := sendBackupEmail(filepath); err != nil {
+		log.Println("⚠️ Falha no envio de e-mail automático:", err)
+	}
 }
 
 // --- DOWNLOAD MANUAL (Rota API) ---
-// Alterado para salvar localmente e enviar e-mail também
 func DownloadBackup(c *fiber.Ctx) error {
 	// 1. Gerar Dados
 	data, err := generateBackupData()
 	if err != nil {
-		return c.Status(500).JSON(fiber.Map{"error": "Erro ao gerar dados"})
+		return c.Status(500).JSON(fiber.Map{"error": "Erro ao gerar dados do banco"})
 	}
 
-	// 2. Salvar Localmente e Enviar E-mail (Em background)
-	// Usamos goroutine para o download do usuário começar imediatamente
-	go func() {
-		filepath, err := saveBackupLocally(data, "manual")
-		if err == nil {
-			log.Println("✅ Backup manual salvo:", filepath)
-			sendBackupEmail(filepath)
-		} else {
-			log.Println("❌ Erro ao salvar backup manual:", err)
-		}
-	}()
+	// 2. Salvar Localmente
+	filepath, err := saveBackupLocally(data, "manual")
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Erro ao salvar arquivo local"})
+	}
 
-	// 3. Retornar Download ao Navegador
+	// 3. Enviar E-mail (Síncrono para confirmação)
+	emailErr := sendBackupEmail(filepath)
+
+	// Adiciona cabeçalho personalizado para avisar o frontend sobre o status do email
+	if emailErr != nil {
+		c.Set("X-Email-Status", "failed")
+		log.Println("❌ Erro ao enviar e-mail manual:", emailErr)
+	} else {
+		c.Set("X-Email-Status", "sent")
+		log.Println("📧 E-mail manual enviado com sucesso!")
+	}
+
+	// 4. Retornar Download
 	filename := fmt.Sprintf("backup_manual_%s.json", time.Now().Format("2006-01-02_15-04"))
 	c.Set("Content-Disposition", "attachment; filename="+filename)
 	c.Set("Content-Type", "application/json")
@@ -115,7 +124,8 @@ func saveBackupLocally(data BackupData, prefix string) (string, error) {
 }
 
 // --- ENVIO DE EMAIL (SMTP) ---
-func sendBackupEmail(attachmentPath string) {
+// Agora retorna 'error' para confirmação
+func sendBackupEmail(attachmentPath string) error {
 	emailFrom := "backup@oemcontelados.com.br"
 	emailTo := "backup@oemcontelados.com.br"
 	emailPass := "#copia@2026"
@@ -126,16 +136,15 @@ func sendBackupEmail(attachmentPath string) {
 	m.SetHeader("From", emailFrom)
 	m.SetHeader("To", emailTo)
 	m.SetHeader("Subject", fmt.Sprintf("Backup do Sistema - %s", time.Now().Format("02/01/2006 15:04")))
-	m.SetBody("text/plain", "Segue em anexo o arquivo de backup (Gerado Manualmente ou Automaticamente).")
+	m.SetBody("text/plain", "Segue em anexo o arquivo de backup.")
 	m.Attach(attachmentPath)
 
 	d := gomail.NewDialer(smtpHost, smtpPort, emailFrom, emailPass)
 
 	if err := d.DialAndSend(m); err != nil {
-		log.Println("❌ Erro ao enviar e-mail:", err)
-	} else {
-		log.Println("📧 E-mail de backup enviado com sucesso!")
+		return err
 	}
+	return nil
 }
 
 // --- FUNÇÃO AUXILIAR PARA GERAR DADOS ---
