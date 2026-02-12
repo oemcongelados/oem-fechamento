@@ -72,7 +72,7 @@ const TripSummary = () => {
             flexWrap: 'wrap',
             gap: '15px'
         }}>
-            {/* Lado Esquerdo: Título, Status e ROMANEIO */}
+            {/* Lado Esquerdo: Título e Status */}
             <div>
                 <h2 style={{margin: 0, color: '#333'}}>Lançamento de Viagem</h2>
                 
@@ -85,23 +85,6 @@ const TripSummary = () => {
                             </span>
                         )}
                     </div>
-
-                    {/* --- NOVO: EXIBIÇÃO DO ROMANEIO --- */}
-                    {trip.romaneio && (
-                        <div style={{
-                            fontSize: '1rem', 
-                            color: '#4b5563', 
-                            backgroundColor: '#f3f4f6', 
-                            padding: '4px 8px', 
-                            borderRadius: '4px',
-                            border: '1px solid #e5e7eb',
-                            display: 'inline-block',
-                            marginTop: '5px',
-                            fontWeight: '500'
-                        }}>
-                            📦 Romaneio: <strong>{trip.romaneio}</strong>
-                        </div>
-                    )}
                 </div>
             </div>
 
@@ -122,13 +105,31 @@ const TripSummary = () => {
             </div>
         </div>
 
-        {/* 1. LOGÍSTICA */}
+        {/* 1. LOGÍSTICA (AJUSTADO) */}
         <div style={{backgroundColor: '#f9fafb', padding: '15px', borderRadius: '8px', marginBottom: '20px'}}>
             <h4 style={{marginTop: 0, color: '#555', borderBottom: '1px solid #e5e7eb', paddingBottom: '8px'}}>🚚 Logística e Rota</h4>
             <div className="form-grid">
                 <div><strong>Motorista:</strong><br/>{trip.driver}</div>
                 <div><strong>Veículo:</strong><br/>{trip.vehicle}</div>
                 <div><strong>Rota:</strong><br/>{trip.route}</div>
+
+                {/* --- AQUI: MOVIDO DO CABEÇALHO PARA CÁ --- */}
+                {trip.romaneio && (
+                    <div>
+                        <strong>Romaneio:</strong><br/>
+                        <span style={{
+                            backgroundColor: '#e5e7eb', 
+                            color: '#374151',
+                            padding: '2px 8px', 
+                            borderRadius: '4px', 
+                            fontSize: '0.9rem',
+                            fontWeight: 'bold',
+                            border: '1px solid #d1d5db'
+                        }}>
+                            {trip.romaneio}
+                        </span>
+                    </div>
+                )}
             </div>
         </div>
 

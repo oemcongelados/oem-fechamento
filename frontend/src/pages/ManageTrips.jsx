@@ -38,12 +38,10 @@ const ManageTrips = () => {
     fetchTrips();
   }, [fetchTrips]);
 
-  // --- AÇÃO APROVAR (Admin) - MODIFICADO PARA PEDIR ROMANEIO ---
+  // --- AÇÃO APROVAR (Admin) ---
   const handleApprove = async (id) => {
-    // Solicita o número do romaneio ao administrador
     const romaneio = window.prompt("ATENÇÃO: Aprovar bloqueará edições.\n\nPor favor, insira o número do ROMANEIO para confirmar:");
 
-    // Se o usuário clicar em "Cancelar" (retorna null), paramos a execução.
     if (romaneio === null) return;
 
     const token = localStorage.getItem('oem_token');
@@ -52,9 +50,8 @@ const ManageTrips = () => {
             method: 'PATCH',
             headers: { 
                 'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json' // Necessário para enviar o corpo JSON
+                'Content-Type': 'application/json' 
             },
-            // Envia o romaneio digitado para o backend
             body: JSON.stringify({ romaneio: romaneio })
         });
 
@@ -94,10 +91,12 @@ const ManageTrips = () => {
     }
   };
 
-  // --- AÇÃO EXCLUIR (Admin) ---
+  // --- AÇÃO EXCLUIR (Admin) - CORRIGIDA ---
   const handleDelete = async (id) => {
-    const confirmation = window.prompt("Para excluir permanentemente, digite 'DELETAR' abaixo:");
-    if (confirmation !== 'DELETAR') return;
+    // ALTERAÇÃO AQUI: Usando window.confirm em vez de window.prompt
+    if (!window.confirm("Tem certeza que deseja EXCLUIR este registro permanentemente?")) {
+        return;
+    }
 
     const token = localStorage.getItem('oem_token');
     try {
@@ -154,7 +153,7 @@ const ManageTrips = () => {
         />
       </div>
 
-      {/* LISTA DE CARDS (Layout Novo) */}
+      {/* LISTA DE CARDS */}
       <div style={{ display: 'grid', gap: '15px' }}>
         
         {loading ? (
@@ -176,7 +175,7 @@ const ManageTrips = () => {
                         boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
                         border: '1px solid #eee'
                     }}>
-                        {/* LINHA 1: Cabeçalho do Card (Data, ID e Status) */}
+                        {/* LINHA 1: Cabeçalho do Card */}
                         <div style={{display: 'flex', justifyContent: 'space-between', marginBottom: '10px', alignItems: 'center'}}>
                             <div>
                                 <span style={{fontWeight: 'bold', fontSize: '1.1rem', color: '#333'}}>
@@ -185,7 +184,6 @@ const ManageTrips = () => {
                                 <div style={{fontSize: '0.75rem', color: '#888'}}>ID: {trip.id.slice(-6)}</div>
                             </div>
                             
-                            {/* Badge de Status */}
                             <div style={{
                                 padding: '4px 8px', 
                                 borderRadius: '12px', 
@@ -222,7 +220,6 @@ const ManageTrips = () => {
                             gap: '10px'
                         }}>
                             
-                            {/* Saldo */}
                             <div>
                                 <div style={{fontSize: '0.8rem', color: '#666'}}>Saldo Final</div>
                                 <div style={{
@@ -234,10 +231,7 @@ const ManageTrips = () => {
                                 </div>
                             </div>
 
-                            {/* --- BOTÕES DE AÇÃO --- */}
                             <div style={{display: 'flex', gap: '8px'}}>
-                                
-                                {/* 1. RESUMO */}
                                 <button 
                                     onClick={() => navigate(`/summary/${trip.id}`)}
                                     title="Ver Resumo"
@@ -246,7 +240,6 @@ const ManageTrips = () => {
                                     📄
                                 </button>
 
-                                {/* 2. EDITAR (Apenas se não aprovado) */}
                                 {!isApproved && (
                                     <button 
                                         onClick={() => navigate(`/closing/${trip.id}`)}
@@ -257,7 +250,6 @@ const ManageTrips = () => {
                                     </button>
                                 )}
 
-                                {/* 3. APROVAR (Apenas se não aprovado) */}
                                 {isAdmin && !isApproved && (
                                     <button 
                                         onClick={() => handleApprove(trip.id)}
@@ -268,7 +260,6 @@ const ManageTrips = () => {
                                     </button>
                                 )}
 
-                                {/* 4. REABRIR (Apenas se já aprovado) */}
                                 {isAdmin && isApproved && (
                                     <button 
                                         onClick={() => handleReopen(trip.id)}
@@ -279,7 +270,6 @@ const ManageTrips = () => {
                                     </button>
                                 )}
 
-                                {/* 5. EXCLUIR (Sempre disponível para Admin) */}
                                 {isAdmin && (
                                     <button 
                                         onClick={() => handleDelete(trip.id)}
