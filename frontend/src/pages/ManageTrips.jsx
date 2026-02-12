@@ -25,10 +25,14 @@ const ManageTrips = () => {
           navigate('/');
           return;
       }
+      
       const data = await response.json();
-      setTrips(data);
+      // Proteção: Garante que 'data' seja um array
+      setTrips(Array.isArray(data) ? data : []);
+      
     } catch (error) {
       console.error("Erro ao buscar viagens:", error);
+      setTrips([]);
     } finally {
       setLoading(false);
     }
@@ -40,8 +44,9 @@ const ManageTrips = () => {
 
   // --- AÇÃO APROVAR (Admin) ---
   const handleApprove = async (id) => {
-    const romaneio = window.prompt("ATENÇÃO: Aprovar bloqueará edições.\n\nPor favor, insira o número do ROMANEIO para confirmar:");
+    if (!id) return; // Proteção contra ID nulo
 
+    const romaneio = window.prompt("ATENÇÃO: Aprovar bloqueará edições.\n\nPor favor, insira o número do ROMANEIO para confirmar:");
     if (romaneio === null) return;
 
     const token = localStorage.getItem('oem_token');
@@ -70,6 +75,7 @@ const ManageTrips = () => {
 
   // --- AÇÃO REABRIR (Admin) ---
   const handleReopen = async (id) => {
+    if (!id) return;
     if(!window.confirm("Deseja REABRIR esta viagem para edição?")) return;
 
     const token = localStorage.getItem('oem_token');
@@ -91,9 +97,9 @@ const ManageTrips = () => {
     }
   };
 
-  // --- AÇÃO EXCLUIR (Admin) - CORRIGIDA ---
+  // --- AÇÃO EXCLUIR (Admin) ---
   const handleDelete = async (id) => {
-    // ALTERAÇÃO AQUI: Usando window.confirm em vez de window.prompt
+    if (!id) return;
     if (!window.confirm("Tem certeza que deseja EXCLUIR este registro permanentemente?")) {
         return;
     }
@@ -107,7 +113,7 @@ const ManageTrips = () => {
         
         if (res.ok) {
             alert("Registro excluído com sucesso!");
-            fetchTrips(); // Atualiza a lista
+            fetchTrips();
         } else {
             const err = await res.json();
             alert("Erro ao excluir: " + (err.error || "Erro desconhecido"));
@@ -127,11 +133,15 @@ const ManageTrips = () => {
     return entries - expenses;
   };
 
-  const filteredTrips = trips.filter(t => 
-    (t.driver && t.driver.toLowerCase().includes(filter.toLowerCase())) ||
-    (t.route && t.route.toLowerCase().includes(filter.toLowerCase())) ||
-    (t.vehicle && t.vehicle.toLowerCase().includes(filter.toLowerCase()))
-  );
+  // Filtro Seguro (Proteção contra nulos)
+  const filteredTrips = trips.filter(t => {
+    const searchTerm = filter.toLowerCase();
+    const driver = t.driver ? t.driver.toLowerCase() : '';
+    const route = t.route ? t.route.toLowerCase() : '';
+    const vehicle = t.vehicle ? t.vehicle.toLowerCase() : '';
+
+    return driver.includes(searchTerm) || route.includes(searchTerm) || vehicle.includes(searchTerm);
+  });
 
   return (
     <Layout title="Gerenciar Viagens">
@@ -163,12 +173,29 @@ const ManageTrips = () => {
                 Nenhuma viagem encontrada.
              </div>
         ) : (
-             filteredTrips.map((trip) => {
+             filteredTrips.map((trip, index) => {
                 const balance = calculateBalance(trip);
                 const isApproved = trip.approved === true;
+                
+                // --- CORREÇÃO CRUCIAL: ID SEGURO ---
+                // Usa trip.id se existir, senão usa trip._id, senão usa o índice (evita crash)
+                const safeId = trip.id || trip._id || `temp-${index}`;
+                const displayId = typeof safeId === 'string' ? safeId.slice(-6) : '---';
+
+                // Tratamento seguro de data
+                let dateDisplay = 'Data Inválida';
+                try {
+                    if (trip.start_date) {
+                         // Garante que a data seja lida corretamente mesmo se vier como string UTC
+                         const dateObj = new Date(trip.start_date);
+                         if (!isNaN(dateObj)) {
+                             dateDisplay = dateObj.toLocaleDateString('pt-BR', {timeZone: 'UTC'});
+                         }
+                    }
+                } catch (e) { console.log(e); }
 
                 return (
-                    <div key={trip.id} className="card" style={{
+                    <div key={safeId} className="card" style={{
                         backgroundColor: 'white',
                         padding: '15px',
                         borderRadius: '8px',
@@ -179,9 +206,9 @@ const ManageTrips = () => {
                         <div style={{display: 'flex', justifyContent: 'space-between', marginBottom: '10px', alignItems: 'center'}}>
                             <div>
                                 <span style={{fontWeight: 'bold', fontSize: '1.1rem', color: '#333'}}>
-                                    {new Date(trip.start_date).toLocaleDateString()}
+                                    {dateDisplay}
                                 </span>
-                                <div style={{fontSize: '0.75rem', color: '#888'}}>ID: {trip.id.slice(-6)}</div>
+                                <div style={{fontSize: '0.75rem', color: '#888'}}>ID: {displayId}</div>
                             </div>
                             
                             <div style={{
@@ -201,15 +228,15 @@ const ManageTrips = () => {
                         <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '15px'}}>
                             <div>
                                 <div style={{fontSize: '0.8rem', color: '#666'}}>Motorista</div>
-                                <div style={{fontWeight: 'bold'}}>{trip.driver}</div>
+                                <div style={{fontWeight: 'bold'}}>{trip.driver || '---'}</div>
                             </div>
                             <div>
                                 <div style={{fontSize: '0.8rem', color: '#666'}}>Rota</div>
-                                <div style={{fontWeight: 'bold'}}>{trip.route}</div>
+                                <div style={{fontWeight: 'bold'}}>{trip.route || '---'}</div>
                             </div>
                         </div>
 
-                        {/* LINHA 3: Saldo e Botões de Ação */}
+                        {/* LINHA 3: Saldo e Botões */}
                         <div style={{
                             borderTop: '1px solid #f3f4f6', 
                             paddingTop: '15px', 
@@ -233,7 +260,7 @@ const ManageTrips = () => {
 
                             <div style={{display: 'flex', gap: '8px'}}>
                                 <button 
-                                    onClick={() => navigate(`/summary/${trip.id}`)}
+                                    onClick={() => navigate(`/summary/${safeId}`)}
                                     title="Ver Resumo"
                                     style={{backgroundColor: '#3b82f6', color: 'white', border: 'none', padding: '8px 12px', borderRadius: '6px', cursor: 'pointer'}}
                                 >
@@ -242,7 +269,7 @@ const ManageTrips = () => {
 
                                 {!isApproved && (
                                     <button 
-                                        onClick={() => navigate(`/closing/${trip.id}`)}
+                                        onClick={() => navigate(`/closing/${safeId}`)}
                                         title="Editar"
                                         style={{backgroundColor: '#f59e0b', color: 'white', border: 'none', padding: '8px 12px', borderRadius: '6px', cursor: 'pointer'}}
                                     >
@@ -252,7 +279,7 @@ const ManageTrips = () => {
 
                                 {isAdmin && !isApproved && (
                                     <button 
-                                        onClick={() => handleApprove(trip.id)}
+                                        onClick={() => handleApprove(safeId)}
                                         title="Aprovar"
                                         style={{backgroundColor: '#10b981', color: 'white', border: 'none', padding: '8px 12px', borderRadius: '6px', cursor: 'pointer'}}
                                     >
@@ -262,7 +289,7 @@ const ManageTrips = () => {
 
                                 {isAdmin && isApproved && (
                                     <button 
-                                        onClick={() => handleReopen(trip.id)}
+                                        onClick={() => handleReopen(safeId)}
                                         title="Reabrir / Desbloquear"
                                         style={{backgroundColor: '#0ea5e9', color: 'white', border: 'none', padding: '8px 12px', borderRadius: '6px', cursor: 'pointer'}}
                                     >
@@ -272,7 +299,7 @@ const ManageTrips = () => {
 
                                 {isAdmin && (
                                     <button 
-                                        onClick={() => handleDelete(trip.id)}
+                                        onClick={() => handleDelete(safeId)}
                                         title="Excluir"
                                         style={{backgroundColor: '#ef4444', color: 'white', border: 'none', padding: '8px 12px', borderRadius: '6px', cursor: 'pointer'}}
                                     >
