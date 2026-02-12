@@ -105,7 +105,7 @@ const TripSummary = () => {
             </div>
         </div>
 
-        {/* 1. LOGÍSTICA (AJUSTADO) */}
+        {/* 1. LOGÍSTICA */}
         <div style={{backgroundColor: '#f9fafb', padding: '15px', borderRadius: '8px', marginBottom: '20px'}}>
             <h4 style={{marginTop: 0, color: '#555', borderBottom: '1px solid #e5e7eb', paddingBottom: '8px'}}>🚚 Logística e Rota</h4>
             <div className="form-grid">
@@ -113,8 +113,9 @@ const TripSummary = () => {
                 <div><strong>Veículo:</strong><br/>{trip.vehicle}</div>
                 <div><strong>Rota:</strong><br/>{trip.route}</div>
 
-                {/* --- AQUI: MOVIDO DO CABEÇALHO PARA CÁ --- */}
-                {trip.romaneio && (
+                {/* --- CAMPO ROMANEIO NA GRADE --- */}
+                {/* Alterei para exibir mesmo se vazio (mas aprovado) para confirmar que o código atualizou */}
+                {(trip.romaneio || trip.approved) && (
                     <div>
                         <strong>Romaneio:</strong><br/>
                         <span style={{
@@ -126,7 +127,7 @@ const TripSummary = () => {
                             fontWeight: 'bold',
                             border: '1px solid #d1d5db'
                         }}>
-                            {trip.romaneio}
+                            {trip.romaneio || '---'}
                         </span>
                     </div>
                 )}
