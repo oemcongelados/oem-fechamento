@@ -65,7 +65,7 @@ const TripSummary = () => {
             paddingBottom: '20px', 
             marginBottom: '20px', 
             display: 'flex', 
-            justifyContent: 'space-between',
+            justifyContent: 'space-between', 
             alignItems: 'center',
             flexWrap: 'wrap',
             gap: '15px'
@@ -196,17 +196,19 @@ const TripSummary = () => {
                     <span>{formatCurrency(trip.expense_other)}</span>
                 </div>
 
-                {/* --- ALTERAÇÃO: EXIBIÇÃO DA DESCRIÇÃO DE OUTROS --- */}
+                {/* --- AQUI: CAIXA DESTACADA PARA OBSERVAÇÃO DO GASTO --- */}
                 {trip.expense_other_desc && (
                     <div style={{
-                        marginTop: '-2px', 
-                        marginBottom: '8px', 
-                        textAlign: 'right', 
-                        fontSize: '0.85rem', 
-                        color: '#b91c1c', 
-                        fontStyle: 'italic'
+                        marginTop: '5px',
+                        marginBottom: '10px',
+                        backgroundColor: '#fff1f2',
+                        padding: '8px',
+                        borderRadius: '4px',
+                        border: '1px solid #fecaca',
+                        fontSize: '0.9rem',
+                        color: '#991b1b'
                     }}>
-                        Obs: {trip.expense_other_desc}
+                        <strong>Obs:</strong> {trip.expense_other_desc}
                     </div>
                 )}
 
