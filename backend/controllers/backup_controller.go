@@ -58,7 +58,6 @@ func performAutomaticBackup() {
 
 	log.Println("✅ Backup automático salvo:", filepath)
 
-	// Tenta enviar e-mail (ignora erro no automático para não travar log)
 	if err := sendBackupEmail(filepath); err != nil {
 		log.Println("⚠️ Falha no envio de e-mail automático:", err)
 	}
@@ -81,10 +80,10 @@ func DownloadBackup(c *fiber.Ctx) error {
 	// 3. Enviar E-mail (Síncrono para confirmação)
 	emailErr := sendBackupEmail(filepath)
 
-	// Adiciona cabeçalho personalizado para avisar o frontend sobre o status do email
 	if emailErr != nil {
+		// Loga o erro exato no terminal da VPS para ajudar no debug
+		log.Printf("❌ ERRO SMTP: %v\n", emailErr)
 		c.Set("X-Email-Status", "failed")
-		log.Println("❌ Erro ao enviar e-mail manual:", emailErr)
 	} else {
 		c.Set("X-Email-Status", "sent")
 		log.Println("📧 E-mail manual enviado com sucesso!")
@@ -124,13 +123,14 @@ func saveBackupLocally(data BackupData, prefix string) (string, error) {
 }
 
 // --- ENVIO DE EMAIL (SMTP) ---
-// Agora retorna 'error' para confirmação
 func sendBackupEmail(attachmentPath string) error {
-	emailFrom := "backup@oemcontelados.com.br"
-	emailTo := "backup@oemcontelados.com.br"
+	// --- CORREÇÃO DO DOMÍNIO E PORTA ---
+	emailFrom := "backup@oemcongelados.com.br" // Corrigido de 'contelados' para 'congelados'
+	emailTo := "backup@oemcongelados.com.br"
 	emailPass := "#copia@2026"
+
 	smtpHost := "smtp.hostinger.com"
-	smtpPort := 465
+	smtpPort := 587 // Alterado para 587 (STARTTLS) que é mais compatível com Go
 
 	m := gomail.NewMessage()
 	m.SetHeader("From", emailFrom)
@@ -141,6 +141,7 @@ func sendBackupEmail(attachmentPath string) error {
 
 	d := gomail.NewDialer(smtpHost, smtpPort, emailFrom, emailPass)
 
+	// Tenta enviar
 	if err := d.DialAndSend(m); err != nil {
 		return err
 	}
