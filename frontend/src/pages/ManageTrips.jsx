@@ -38,21 +38,32 @@ const ManageTrips = () => {
     fetchTrips();
   }, [fetchTrips]);
 
-  // --- AÇÃO APROVAR (Admin) ---
+  // --- AÇÃO APROVAR (Admin) - MODIFICADO PARA PEDIR ROMANEIO ---
   const handleApprove = async (id) => {
-    if(!window.confirm("ATENÇÃO: Aprovar bloqueará edições. Confirmar?")) return;
+    // Solicita o número do romaneio ao administrador
+    const romaneio = window.prompt("ATENÇÃO: Aprovar bloqueará edições.\n\nPor favor, insira o número do ROMANEIO para confirmar:");
+
+    // Se o usuário clicar em "Cancelar" (retorna null), paramos a execução.
+    if (romaneio === null) return;
 
     const token = localStorage.getItem('oem_token');
     try {
         const res = await fetch(`${import.meta.env.VITE_API_URL}/api/trips/${id}/approve`, {
             method: 'PATCH',
-            headers: { Authorization: `Bearer ${token}` }
+            headers: { 
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json' // Necessário para enviar o corpo JSON
+            },
+            // Envia o romaneio digitado para o backend
+            body: JSON.stringify({ romaneio: romaneio })
         });
+
         if (res.ok) {
             alert("Fechamento aprovado com sucesso!");
             fetchTrips();
         } else {
-            alert("Erro ao aprovar.");
+            const errorData = await res.json();
+            alert("Erro ao aprovar: " + (errorData.error || "Erro desconhecido"));
         }
     } catch (error) { 
         console.error("Erro na aprovação:", error);
@@ -85,7 +96,8 @@ const ManageTrips = () => {
 
   // --- AÇÃO EXCLUIR (Admin) ---
   const handleDelete = async (id) => {
-    if(!window.confirm("TEM CERTEZA? Essa ação excluirá permanentemente o registro.")) return;
+    const confirmation = window.prompt("Para excluir permanentemente, digite 'DELETAR' abaixo:");
+    if (confirmation !== 'DELETAR') return;
 
     const token = localStorage.getItem('oem_token');
     try {

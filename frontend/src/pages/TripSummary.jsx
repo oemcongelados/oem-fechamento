@@ -69,23 +69,55 @@ const TripSummary = () => {
             display: 'flex', 
             justifyContent: 'space-between',
             alignItems: 'center',
-            flexWrap: 'wrap'
+            flexWrap: 'wrap',
+            gap: '15px'
         }}>
+            {/* Lado Esquerdo: Título, Status e ROMANEIO */}
             <div>
                 <h2 style={{margin: 0, color: '#333'}}>Lançamento de Viagem</h2>
-                <div style={{display: 'flex', alignItems: 'center', gap: '10px'}}>
-                    <span style={{color: '#888', fontSize: '0.9rem'}}>ID: {trip.id}</span>
-                    {trip.approved && (
-                        <span style={{backgroundColor:'#dcfce7', color:'#166534', padding:'2px 8px', borderRadius:'4px', fontSize:'0.75rem', border:'1px solid #bbf7d0', fontWeight: 'bold'}}>
-                            ✅ APROVADO
-                        </span>
+                
+                <div style={{display: 'flex', flexDirection: 'column', gap: '5px', marginTop: '5px'}}>
+                    <div style={{display: 'flex', alignItems: 'center', gap: '10px'}}>
+                        <span style={{color: '#888', fontSize: '0.9rem'}}>ID: {trip.id}</span>
+                        {trip.approved && (
+                            <span style={{backgroundColor:'#dcfce7', color:'#166534', padding:'2px 8px', borderRadius:'4px', fontSize:'0.75rem', border:'1px solid #bbf7d0', fontWeight: 'bold'}}>
+                                ✅ APROVADO
+                            </span>
+                        )}
+                    </div>
+
+                    {/* --- NOVO: EXIBIÇÃO DO ROMANEIO --- */}
+                    {trip.romaneio && (
+                        <div style={{
+                            fontSize: '1rem', 
+                            color: '#4b5563', 
+                            backgroundColor: '#f3f4f6', 
+                            padding: '4px 8px', 
+                            borderRadius: '4px',
+                            border: '1px solid #e5e7eb',
+                            display: 'inline-block',
+                            marginTop: '5px',
+                            fontWeight: '500'
+                        }}>
+                            📦 Romaneio: <strong>{trip.romaneio}</strong>
+                        </div>
                     )}
                 </div>
             </div>
-            <div style={{textAlign: 'right'}}>
-                <div style={{fontSize: '0.9rem', color: '#666'}}>Data de Saída</div>
-                <div style={{fontWeight: 'bold', fontSize: '1.1rem'}}>
-                    {new Date(trip.start_date).toLocaleDateString('pt-BR')}
+
+            {/* Lado Direito: DATAS (SAÍDA E CHEGADA) */}
+            <div style={{display: 'flex', gap: '20px', textAlign: 'right'}}>
+                <div>
+                    <div style={{fontSize: '0.8rem', color: '#666', textTransform: 'uppercase', letterSpacing: '0.5px'}}>Saída</div>
+                    <div style={{fontWeight: 'bold', fontSize: '1.1rem', color: '#333'}}>
+                        {new Date(trip.start_date).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}
+                    </div>
+                </div>
+                <div>
+                    <div style={{fontSize: '0.8rem', color: '#666', textTransform: 'uppercase', letterSpacing: '0.5px'}}>Chegada</div>
+                    <div style={{fontWeight: 'bold', fontSize: '1.1rem', color: '#333'}}>
+                        {new Date(trip.end_date).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}
+                    </div>
                 </div>
             </div>
         </div>
@@ -119,10 +151,9 @@ const TripSummary = () => {
             </div>
         </div>
 
-        {/* 3. FINANCEIRO (CORRIGIDO PARA RESPONSIVIDADE) */}
+        {/* 3. FINANCEIRO */}
         <div style={{
             display: 'grid', 
-            // AQUI ESTÁ A MÁGICA: Adapta para celular (stack) ou PC (lado a lado)
             gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', 
             gap: '20px', 
             marginBottom: '20px'

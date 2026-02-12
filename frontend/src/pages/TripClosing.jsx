@@ -7,7 +7,9 @@ const TripClosing = () => {
   const { id } = useParams();
   const isEditMode = !!id;
 
+  // --- ALTERAÇÃO: Adicionado 'romaneio' nos dados iniciais ---
   const initialData = {
+    romaneio: '', // Campo novo
     route: '', start_date: '', end_date: '', driver: '', vehicle: '',
     km_start: '', km_end: '', value_withdraw: '', value_received: '', return_notes: '',
     expense_fuel: '', expense_daily: '', expense_assistant: '', expense_toll: '', expense_other: ''
@@ -71,7 +73,7 @@ const TripClosing = () => {
     }
   }, [formData, isEditMode]);
 
-  // --- MUDANÇA 1: Função Genérica para Texto/Números Simples ---
+  // --- Função Genérica para Texto/Números Simples ---
   const handleChange = (e) => {
     const { name, value } = e.target;
     const isNumber = ['km_start', 'km_end'].includes(name);
@@ -82,21 +84,14 @@ const TripClosing = () => {
     }));
   };
 
-  // --- MUDANÇA 2: Função Específica para Moeda (Máscara R$) ---
-  // Transforma digitação em centavos e salva float no estado
+  // --- Função Específica para Moeda (Máscara R$) ---
   const handleCurrencyChange = (e) => {
     const { name, value } = e.target;
-    
-    // 1. Remove tudo que não for dígito
     const onlyDigits = value.replace(/\D/g, "");
-    
-    // 2. Converte para float (ex: 1234 virar 12.34)
     const floatValue = Number(onlyDigits) / 100;
-    
     setFormData(prev => ({ ...prev, [name]: floatValue }));
   };
 
-  // Helper para exibir o valor formatado no input (R$ 0,00)
   const formatCurrencyInput = (value) => {
     if (value === '' || value === undefined || value === null) return '';
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
@@ -114,7 +109,6 @@ const TripClosing = () => {
     
     const method = isEditMode ? 'PUT' : 'POST';
 
-    // Garante que campos vazios virem 0 para o backend
     const payload = { ...formData };
     const numericFields = [
         'km_start', 'km_end', 
@@ -141,8 +135,15 @@ const TripClosing = () => {
 
       if (response.ok) {
         if (!isEditMode) localStorage.removeItem('oem_trip_draft');
+        
+        setStatus({ type: 'success', msg: 'Fechamento Salvo!' });
+        
         const tripId = isEditMode ? id : data.id;
-        navigate(`/summary/${tripId}`);
+        
+        setTimeout(() => {
+            navigate(`/summary/${tripId}`);
+        }, 1500);
+        
       } else {
         setStatus({ type: 'error', msg: data.error || 'Erro ao salvar dados.' });
       }
@@ -151,6 +152,15 @@ const TripClosing = () => {
       setStatus({ type: 'error', msg: 'Erro de conexão.' });
     }
   };
+
+  // Helper para definir cor da mensagem
+  const getStatusColor = (type) => {
+      if (type === 'error') return { bg: '#fee2e2', text: '#991b1b' }; // Vermelho
+      if (type === 'success') return { bg: '#dcfce7', text: '#166534' }; // Verde
+      return { bg: '#e0f2fe', text: '#075985' }; // Azul (loading/info)
+  };
+
+  const statusStyle = getStatusColor(status.type);
 
   return (
     <Layout>
@@ -162,9 +172,13 @@ const TripClosing = () => {
 
         {status.msg && (
           <div style={{
-            padding: '15px', marginBottom: '20px', borderRadius: '8px', textAlign: 'center', fontWeight: 'bold',
-            backgroundColor: status.type === 'error' ? '#fee2e2' : '#e0f2fe',
-            color: status.type === 'error' ? '#991b1b' : '#075985'
+            padding: '15px', 
+            marginBottom: '20px', 
+            borderRadius: '8px', 
+            textAlign: 'center', 
+            fontWeight: 'bold',
+            backgroundColor: statusStyle.bg,
+            color: statusStyle.text
           }}>
             {status.msg}
           </div>
@@ -186,6 +200,20 @@ const TripClosing = () => {
                 <label>Data de Chegada *</label>
                 <input type="date" name="end_date" value={formData.end_date} onChange={handleChange} required />
               </div>
+            </div>
+
+            {/* --- NOVO: CAMPO DE ROMANEIO (Se houver necessidade de editar) --- */}
+            <div className="form-grid" style={{marginTop: '16px'}}>
+               <div style={{gridColumn: '1 / -1'}}>
+                 <label>Romaneio (Opcional)</label>
+                 <input 
+                    type="text" 
+                    name="romaneio" 
+                    value={formData.romaneio || ''} 
+                    onChange={handleChange} 
+                    placeholder="Número do Romaneio (se houver)"
+                 />
+               </div>
             </div>
 
             {/* LINHA 2: ROTA E MOTORISTA */}
