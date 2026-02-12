@@ -11,7 +11,8 @@ const TripClosing = () => {
     romaneio: '',
     route: '', start_date: '', end_date: '', driver: '', vehicle: '',
     km_start: '', km_end: '', value_withdraw: '', value_received: '', return_notes: '',
-    expense_fuel: '', expense_daily: '', expense_assistant: '', expense_toll: '', expense_other: ''
+    expense_fuel: '', expense_daily: '', expense_assistant: '', expense_toll: '', expense_other: '',
+    expense_other_desc: '' // --- CAMPO NOVO ---
   };
 
   const [formData, setFormData] = useState(() => {
@@ -72,7 +73,6 @@ const TripClosing = () => {
     }
   }, [formData, isEditMode]);
 
-  // --- Função Genérica para Texto/Números Simples ---
   const handleChange = (e) => {
     const { name, value } = e.target;
     const isNumber = ['km_start', 'km_end'].includes(name);
@@ -83,7 +83,6 @@ const TripClosing = () => {
     }));
   };
 
-  // --- Função Específica para Moeda (Máscara R$) ---
   const handleCurrencyChange = (e) => {
     const { name, value } = e.target;
     const onlyDigits = value.replace(/\D/g, "");
@@ -135,9 +134,8 @@ const TripClosing = () => {
       if (response.ok) {
         if (!isEditMode) localStorage.removeItem('oem_trip_draft');
         
-        // --- ATUALIZADO: Mensagem solicitada e Scroll para o topo ---
         setStatus({ type: 'success', msg: 'Lançamento Salvo!' });
-        window.scrollTo(0, 0); // Garante que o usuário veja a mensagem
+        window.scrollTo(0, 0);
         
         const tripId = isEditMode ? id : data.id;
         
@@ -156,12 +154,10 @@ const TripClosing = () => {
     }
   };
 
-  // --- CORES DA MENSAGEM (Já configuradas para Verde/Verde no Success) ---
   const getStatusColor = (type) => {
-      if (type === 'error') return { bg: '#fee2e2', text: '#991b1b' }; // Vermelho
-      // SUCESSO: Fundo Verde Claro (#dcfce7) e Texto Verde Escuro (#166534)
+      if (type === 'error') return { bg: '#fee2e2', text: '#991b1b' }; 
       if (type === 'success') return { bg: '#dcfce7', text: '#166534' }; 
-      return { bg: '#e0f2fe', text: '#075985' }; // Azul (loading)
+      return { bg: '#e0f2fe', text: '#075985' }; 
   };
 
   const statusStyle = getStatusColor(status.type);
@@ -174,7 +170,6 @@ const TripClosing = () => {
           <p>{isEditMode ? `Editando registro ID: ${id}` : 'Preencha os dados abaixo ao finalizar a rota.'}</p>
         </div>
 
-        {/* --- CAIXA DE MENSAGEM --- */}
         {status.msg && (
           <div style={{
             padding: '15px', 
@@ -182,7 +177,7 @@ const TripClosing = () => {
             borderRadius: '8px', 
             textAlign: 'center', 
             fontWeight: 'bold',
-            border: `1px solid ${statusStyle.text}`, // Adicionei borda sutil para destaque
+            border: `1px solid ${statusStyle.text}`,
             backgroundColor: statusStyle.bg,
             color: statusStyle.text
           }}>
@@ -195,34 +190,24 @@ const TripClosing = () => {
           <div style={{marginBottom: '30px'}}>
             <h3>📋 Dados Gerais</h3>
             
-            {/* LINHA 1: DATAS */}
             <div className="form-grid">
               <div>
                 <label>Data de Saída *</label>
                 <input type="date" name="start_date" value={formData.start_date} onChange={handleChange} required />
               </div>
-              
               <div>
                 <label>Data de Chegada *</label>
                 <input type="date" name="end_date" value={formData.end_date} onChange={handleChange} required />
               </div>
             </div>
 
-            {/* CAMPO DE ROMANEIO */}
             <div className="form-grid" style={{marginTop: '16px'}}>
                <div style={{gridColumn: '1 / -1'}}>
                  <label>Romaneio (Opcional)</label>
-                 <input 
-                    type="text" 
-                    name="romaneio" 
-                    value={formData.romaneio || ''} 
-                    onChange={handleChange} 
-                    placeholder="Número do Romaneio (se houver)"
-                 />
+                 <input type="text" name="romaneio" value={formData.romaneio || ''} onChange={handleChange} placeholder="Número do Romaneio (se houver)" />
                </div>
             </div>
 
-            {/* LINHA 2: ROTA E MOTORISTA */}
             <div className="form-grid" style={{marginTop: '16px'}}>
               <div>
                 <label>Rota *</label>
@@ -240,8 +225,7 @@ const TripClosing = () => {
               </div>
             </div>
 
-            {/* LINHA 3: VEÍCULO */}
-             <div className="form-grid" style={{marginTop: '16px'}}>
+            <div className="form-grid" style={{marginTop: '16px'}}>
               <div style={{gridColumn: '1 / -1'}}>
                 <label>Veículo *</label>
                 <select name="vehicle" value={formData.vehicle} onChange={handleChange} required style={{width: '100%'}}>
@@ -267,41 +251,25 @@ const TripClosing = () => {
               </div>
             </div>
 
-            {/* CAMPOS COM MÁSCARA DE MOEDA */}
             <div className="form-grid" style={{marginTop: '16px'}}>
               <div>
                   <label>Retirada (Adiantamento) *</label>
-                  <input 
-                    type="text" 
-                    name="value_withdraw" 
-                    value={formatCurrencyInput(formData.value_withdraw)} 
-                    onChange={handleCurrencyChange} 
-                    placeholder="R$ 0,00"
-                    required 
-                  />
+                  <input type="text" name="value_withdraw" value={formatCurrencyInput(formData.value_withdraw)} onChange={handleCurrencyChange} placeholder="R$ 0,00" required />
               </div>
               <div>
                   <label>Recebido em Dinheiro *</label>
-                  <input 
-                    type="text" 
-                    name="value_received" 
-                    value={formatCurrencyInput(formData.value_received)} 
-                    onChange={handleCurrencyChange} 
-                    placeholder="R$ 0,00"
-                    required 
-                  />
+                  <input type="text" name="value_received" value={formatCurrencyInput(formData.value_received)} onChange={handleCurrencyChange} placeholder="R$ 0,00" required />
               </div>
             </div>
           </div>
 
-          {/* GRUPO 3: Devoluções */}
           <div style={{marginBottom: '30px'}}>
              <label>Houve Devolução de Mercadoria?</label>
              <textarea name="return_notes" rows="3" value={formData.return_notes} onChange={handleChange}></textarea>
           </div>
           <hr style={{border: '0', borderTop: '1px solid var(--border)', margin: '30px 0'}} />
 
-          {/* GRUPO 4: Despesas (COM MÁSCARA DE MOEDA) */}
+          {/* GRUPO 4: Despesas */}
           <div style={{marginBottom: '30px'}}>
             <h3>⛽ Despesas</h3>
             <div className="form-grid">
@@ -313,8 +281,6 @@ const TripClosing = () => {
                   <label>Diária *</label>
                   <input type="text" name="expense_daily" value={formatCurrencyInput(formData.expense_daily)} onChange={handleCurrencyChange} placeholder="R$ 0,00" required />
               </div>
-              
-              {/* Opcionais, mas com máscara */}
               <div>
                   <label>Ajudante</label>
                   <input type="text" name="expense_assistant" value={formatCurrencyInput(formData.expense_assistant)} onChange={handleCurrencyChange} placeholder="R$ 0,00" />
@@ -327,6 +293,29 @@ const TripClosing = () => {
                   <label>Outros</label>
                   <input type="text" name="expense_other" value={formatCurrencyInput(formData.expense_other)} onChange={handleCurrencyChange} placeholder="R$ 0,00" />
               </div>
+
+              {/* --- ALTERAÇÃO: CAMPO DE DESCRIÇÃO CONDICIONAL --- */}
+              {formData.expense_other > 0 && (
+                <div style={{gridColumn: '1 / -1', marginTop: '10px', animation: 'fadeIn 0.5s'}}>
+                   <label style={{color: '#b91c1c', fontWeight: 'bold'}}>
+                      Descrição do gasto "Outros" *
+                   </label>
+                   <input 
+                      type="text" 
+                      name="expense_other_desc" 
+                      value={formData.expense_other_desc || ''} 
+                      onChange={handleChange} 
+                      placeholder="Ex: Borracharia, Manutenção, Compra de peças..."
+                      required
+                      style={{
+                          borderColor: '#b91c1c', 
+                          backgroundColor: '#fef2f2',
+                          width: '100%'
+                      }}
+                   />
+                </div>
+              )}
+
             </div>
           </div>
 
@@ -340,7 +329,6 @@ const TripClosing = () => {
                 </button>
              )}
           </div>
-
         </form>
       </div>
     </Layout>
