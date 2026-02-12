@@ -23,11 +23,11 @@ type BackupData struct {
 
 var collectionsToBackup = []string{"users", "trips", "drivers", "vehicles", "routes"}
 
-// --- INICIALIZAR AGENDADOR (Chamado no main.go) ---
+// --- INICIALIZAR AGENDADOR ---
 func StartBackupScheduler() {
 	c := cron.New()
 
-	// "0 3 * * *" significa: Todo dia às 03:00 da manhã
+	// Backup Automático Diário às 03:00
 	_, err := c.AddFunc("0 3 * * *", func() {
 		fmt.Println("⏳ Iniciando backup automático diário...")
 		performAutomaticBackup()
@@ -44,48 +44,78 @@ func StartBackupScheduler() {
 
 // --- LÓGICA DO BACKUP AUTOMÁTICO ---
 func performAutomaticBackup() {
-	// 1. Gerar os dados
-	backupData, err := generateBackupData()
+	data, err := generateBackupData()
 	if err != nil {
-		log.Println("❌ Erro ao gerar dados do backup:", err)
+		log.Println("❌ Erro ao gerar dados:", err)
 		return
 	}
 
-	// 2. Criar pasta local se não existir
+	filepath, err := saveBackupLocally(data, "auto")
+	if err != nil {
+		log.Println("❌ Erro ao salvar arquivo:", err)
+		return
+	}
+
+	log.Println("✅ Backup automático salvo:", filepath)
+	sendBackupEmail(filepath)
+}
+
+// --- DOWNLOAD MANUAL (Rota API) ---
+// Alterado para salvar localmente e enviar e-mail também
+func DownloadBackup(c *fiber.Ctx) error {
+	// 1. Gerar Dados
+	data, err := generateBackupData()
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Erro ao gerar dados"})
+	}
+
+	// 2. Salvar Localmente e Enviar E-mail (Em background)
+	// Usamos goroutine para o download do usuário começar imediatamente
+	go func() {
+		filepath, err := saveBackupLocally(data, "manual")
+		if err == nil {
+			log.Println("✅ Backup manual salvo:", filepath)
+			sendBackupEmail(filepath)
+		} else {
+			log.Println("❌ Erro ao salvar backup manual:", err)
+		}
+	}()
+
+	// 3. Retornar Download ao Navegador
+	filename := fmt.Sprintf("backup_manual_%s.json", time.Now().Format("2006-01-02_15-04"))
+	c.Set("Content-Disposition", "attachment; filename="+filename)
+	c.Set("Content-Type", "application/json")
+
+	return c.JSON(data)
+}
+
+// --- FUNÇÃO AUXILIAR: SALVAR ARQUIVO LOCAL ---
+func saveBackupLocally(data BackupData, prefix string) (string, error) {
 	backupDir := "./backups"
 	if _, err := os.Stat(backupDir); os.IsNotExist(err) {
 		os.Mkdir(backupDir, 0755)
 	}
 
-	// 3. Salvar Arquivo Localmente
-	filename := fmt.Sprintf("backup_auto_%s.json", time.Now().Format("2006-01-02_15-04-05"))
+	filename := fmt.Sprintf("backup_%s_%s.json", prefix, time.Now().Format("2006-01-02_15-04-05"))
 	filepath := fmt.Sprintf("%s/%s", backupDir, filename)
 
 	file, err := os.Create(filepath)
 	if err != nil {
-		log.Println("❌ Erro ao criar arquivo local:", err)
-		return
+		return "", err
 	}
 	defer file.Close()
 
 	encoder := json.NewEncoder(file)
 	encoder.SetIndent("", "  ")
-	if err := encoder.Encode(backupData); err != nil {
-		log.Println("❌ Erro ao escrever JSON:", err)
-		return
+	if err := encoder.Encode(data); err != nil {
+		return "", err
 	}
 
-	log.Println("✅ Backup salvo localmente:", filepath)
-
-	// 4. Enviar por E-mail
-	// CORREÇÃO: Removemos o segundo argumento 'filename' que não era usado
-	sendBackupEmail(filepath)
+	return filepath, nil
 }
 
 // --- ENVIO DE EMAIL (SMTP) ---
-// CORREÇÃO: Removemos o parâmetro 'filename' da assinatura da função
 func sendBackupEmail(attachmentPath string) {
-	// Configurações do E-mail
 	emailFrom := "backup@oemcontelados.com.br"
 	emailTo := "backup@oemcontelados.com.br"
 	emailPass := "#copia@2026"
@@ -95,21 +125,20 @@ func sendBackupEmail(attachmentPath string) {
 	m := gomail.NewMessage()
 	m.SetHeader("From", emailFrom)
 	m.SetHeader("To", emailTo)
-	m.SetHeader("Subject", fmt.Sprintf("Backup Diário - %s", time.Now().Format("02/01/2006")))
-	m.SetBody("text/plain", "Segue em anexo o backup automático do sistema OEM Sales.")
+	m.SetHeader("Subject", fmt.Sprintf("Backup do Sistema - %s", time.Now().Format("02/01/2006 15:04")))
+	m.SetBody("text/plain", "Segue em anexo o arquivo de backup (Gerado Manualmente ou Automaticamente).")
 	m.Attach(attachmentPath)
 
 	d := gomail.NewDialer(smtpHost, smtpPort, emailFrom, emailPass)
 
-	// Envio
 	if err := d.DialAndSend(m); err != nil {
 		log.Println("❌ Erro ao enviar e-mail:", err)
 	} else {
-		log.Println("📧 E-mail de backup enviado com sucesso para", emailTo)
+		log.Println("📧 E-mail de backup enviado com sucesso!")
 	}
 }
 
-// --- FUNÇÃO AUXILIAR PARA GERAR A STRUCT (Reutilizável) ---
+// --- FUNÇÃO AUXILIAR PARA GERAR DADOS ---
 func generateBackupData() (BackupData, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -134,23 +163,8 @@ func generateBackupData() (BackupData, error) {
 	return fullBackup, nil
 }
 
-// --- DOWNLOAD MANUAL (Rota API) ---
-func DownloadBackup(c *fiber.Ctx) error {
-	data, err := generateBackupData()
-	if err != nil {
-		return c.Status(500).JSON(fiber.Map{"error": "Erro ao gerar dados"})
-	}
-
-	filename := fmt.Sprintf("backup_manual_%s.json", time.Now().Format("2006-01-02_15-04"))
-	c.Set("Content-Disposition", "attachment; filename="+filename)
-	c.Set("Content-Type", "application/json")
-
-	return c.JSON(data)
-}
-
 // --- RESTAURAR BACKUP (Upload) ---
 func RestoreBackup(c *fiber.Ctx) error {
-	// 1. Ler o arquivo enviado
 	file, err := c.FormFile("backup_file")
 	if err != nil {
 		return c.Status(400).JSON(fiber.Map{"error": "Arquivo não enviado"})
@@ -162,7 +176,6 @@ func RestoreBackup(c *fiber.Ctx) error {
 	}
 	defer f.Close()
 
-	// 2. Decodificar JSON
 	var backup BackupData
 	if err := json.NewDecoder(f).Decode(&backup); err != nil {
 		return c.Status(400).JSON(fiber.Map{"error": "Arquivo inválido ou corrompido"})
@@ -171,9 +184,7 @@ func RestoreBackup(c *fiber.Ctx) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
-	// 3. Processar cada coleção
 	for colName, docs := range backup.Data {
-		// Validação de segurança
 		valid := false
 		for _, v := range collectionsToBackup {
 			if v == colName {
@@ -186,8 +197,6 @@ func RestoreBackup(c *fiber.Ctx) error {
 		}
 
 		collection := Db.Collection(colName)
-
-		// Limpar e Restaurar
 		collection.Drop(ctx)
 
 		if len(docs) == 0 {
@@ -196,13 +205,11 @@ func RestoreBackup(c *fiber.Ctx) error {
 
 		var interfaces []interface{}
 		for _, doc := range docs {
-			// Correção de _id
 			if idStr, ok := doc["_id"].(string); ok {
 				if oid, err := primitive.ObjectIDFromHex(idStr); err == nil {
 					doc["_id"] = oid
 				}
 			}
-			// Correção de Datas
 			dateFields := []string{"start_date", "created_at", "CreatedAt", "timestamp"}
 			for _, field := range dateFields {
 				if val, ok := doc[field].(string); ok {
