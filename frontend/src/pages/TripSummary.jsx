@@ -38,6 +38,7 @@ const TripSummary = () => {
     </Layout>
   );
 
+  // --- CÁLCULOS ANALÍTICOS ---
   const totalEntries = (trip.value_withdraw || 0) + (trip.value_received || 0);
   
   const totalExpenses = (
@@ -51,6 +52,7 @@ const TripSummary = () => {
   const balance = totalEntries - totalExpenses; 
   const kmTotal = (trip.km_end || 0) - (trip.km_start || 0);
 
+  // Helper para formatar dinheiro
   const formatCurrency = (val) => {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val || 0);
   };
@@ -70,6 +72,7 @@ const TripSummary = () => {
             flexWrap: 'wrap',
             gap: '15px'
         }}>
+            {/* Lado Esquerdo: Título e Status */}
             <div>
                 <h2 style={{margin: 0, color: '#333'}}>Lançamento de Viagem</h2>
                 <div style={{display: 'flex', flexDirection: 'column', gap: '5px', marginTop: '5px'}}>
@@ -84,6 +87,7 @@ const TripSummary = () => {
                 </div>
             </div>
 
+            {/* Lado Direito: DATAS */}
             <div style={{display: 'flex', gap: '20px', textAlign: 'right'}}>
                 <div>
                     <div style={{fontSize: '0.8rem', color: '#666', textTransform: 'uppercase', letterSpacing: '0.5px'}}>Saída</div>
@@ -108,6 +112,7 @@ const TripSummary = () => {
                 <div><strong>Veículo:</strong><br/>{trip.vehicle}</div>
                 <div><strong>Rota:</strong><br/>{trip.route}</div>
 
+                {/* Exibição do Romaneio */}
                 {(trip.romaneio || trip.approved) && (
                     <div>
                         <strong>Romaneio:</strong><br/>
@@ -175,6 +180,7 @@ const TripSummary = () => {
             {/* SAÍDAS */}
             <div style={{border: '1px solid #fee2e2', borderRadius: '8px', padding: '15px', backgroundColor: '#fef2f2'}}>
                 <h4 style={{marginTop: 0, color: '#991b1b', borderBottom: '1px solid #fecaca', paddingBottom: '8px'}}>📤 Saídas (Despesas)</h4>
+                
                 <div style={{display:'flex', justifyContent:'space-between', marginBottom:'5px'}}>
                     <span>Combustível:</span>
                     <span>{formatCurrency(trip.expense_fuel)}</span>
@@ -196,7 +202,7 @@ const TripSummary = () => {
                     <span>{formatCurrency(trip.expense_other)}</span>
                 </div>
 
-                {/* --- AQUI: CAIXA DESTACADA PARA OBSERVAÇÃO DO GASTO --- */}
+                {/* --- AQUI: CAIXA DESTACADA PARA DESCRIÇÃO DO GASTO (SE EXISTIR) --- */}
                 {trip.expense_other_desc && (
                     <div style={{
                         marginTop: '5px',

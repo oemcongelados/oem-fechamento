@@ -50,8 +50,14 @@ func connectDB() {
 }
 
 func main() {
+	// 1. Conecta ao Banco
 	connectDB()
 
+	// 2. Inicia o Agendador de Backup (NOVO - Passo 3)
+	// Isso garante que o Cron inicie junto com o servidor
+	controllers.StartBackupScheduler()
+
+	// 3. Inicia o Fiber (API)
 	app := fiber.New()
 
 	frontendURL := os.Getenv("FRONTEND_URL")
@@ -82,15 +88,15 @@ func main() {
 	api.Patch("/trips/:id/reopen", controllers.ReopenTrip)
 	api.Delete("/trips/:id", controllers.DeleteTrip)
 
-	// --- Notificações (NOVO) ---
+	// --- Notificações ---
 	api.Get("/notifications", controllers.CheckNotifications)
 	api.Post("/notifications/dismiss", controllers.DismissNotifications)
 
 	// --- Usuários ---
 	api.Post("/register", controllers.RegisterUser)  // Criar
 	api.Get("/users", controllers.GetUsers)          // Listar
-	api.Put("/users/:id", controllers.UpdateUser)    // Editar (NOVO)
-	api.Delete("/users/:id", controllers.DeleteUser) // Excluir (NOVO)
+	api.Put("/users/:id", controllers.UpdateUser)    // Editar
+	api.Delete("/users/:id", controllers.DeleteUser) // Excluir
 
 	// --- Cadastros Gerais ---
 	api.Get("/drivers", controllers.GetDrivers)

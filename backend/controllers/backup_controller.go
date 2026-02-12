@@ -4,25 +4,114 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
+	"os"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/robfig/cron/v3"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"gopkg.in/gomail.v2"
 )
 
 // Estrutura do arquivo de backup
 type BackupData struct {
 	Timestamp time.Time           `json:"timestamp"`
-	Data      map[string][]bson.M `json:"data"` // Mapa: Nome da Coleção -> Lista de Documentos
+	Data      map[string][]bson.M `json:"data"`
 }
 
-// Lista das coleções que queremos salvar
 var collectionsToBackup = []string{"users", "trips", "drivers", "vehicles", "routes"}
 
-// --- GERAR BACKUP (Download) ---
-func DownloadBackup(c *fiber.Ctx) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+// --- INICIALIZAR AGENDADOR (Chamado no main.go) ---
+func StartBackupScheduler() {
+	c := cron.New()
+
+	// "0 3 * * *" significa: Todo dia às 03:00 da manhã
+	_, err := c.AddFunc("0 3 * * *", func() {
+		fmt.Println("⏳ Iniciando backup automático diário...")
+		performAutomaticBackup()
+	})
+
+	if err != nil {
+		log.Println("❌ Erro ao agendar backup:", err)
+		return
+	}
+
+	c.Start()
+	fmt.Println("📅 Agendador de Backup iniciado: Rodará diariamente às 03:00")
+}
+
+// --- LÓGICA DO BACKUP AUTOMÁTICO ---
+func performAutomaticBackup() {
+	// 1. Gerar os dados
+	backupData, err := generateBackupData()
+	if err != nil {
+		log.Println("❌ Erro ao gerar dados do backup:", err)
+		return
+	}
+
+	// 2. Criar pasta local se não existir
+	backupDir := "./backups"
+	if _, err := os.Stat(backupDir); os.IsNotExist(err) {
+		os.Mkdir(backupDir, 0755)
+	}
+
+	// 3. Salvar Arquivo Localmente
+	filename := fmt.Sprintf("backup_auto_%s.json", time.Now().Format("2006-01-02_15-04-05"))
+	filepath := fmt.Sprintf("%s/%s", backupDir, filename)
+
+	file, err := os.Create(filepath)
+	if err != nil {
+		log.Println("❌ Erro ao criar arquivo local:", err)
+		return
+	}
+	defer file.Close()
+
+	encoder := json.NewEncoder(file)
+	encoder.SetIndent("", "  ")
+	if err := encoder.Encode(backupData); err != nil {
+		log.Println("❌ Erro ao escrever JSON:", err)
+		return
+	}
+
+	log.Println("✅ Backup salvo localmente:", filepath)
+
+	// 4. Enviar por E-mail
+	// CORREÇÃO: Removemos o segundo argumento 'filename' que não era usado
+	sendBackupEmail(filepath)
+}
+
+// --- ENVIO DE EMAIL (SMTP) ---
+// CORREÇÃO: Removemos o parâmetro 'filename' da assinatura da função
+func sendBackupEmail(attachmentPath string) {
+	// Configurações do E-mail
+	emailFrom := "backup@oemcontelados.com.br"
+	emailTo := "backup@oemcontelados.com.br"
+	emailPass := "#copia@2026"
+	smtpHost := "smtp.hostinger.com"
+	smtpPort := 465
+
+	m := gomail.NewMessage()
+	m.SetHeader("From", emailFrom)
+	m.SetHeader("To", emailTo)
+	m.SetHeader("Subject", fmt.Sprintf("Backup Diário - %s", time.Now().Format("02/01/2006")))
+	m.SetBody("text/plain", "Segue em anexo o backup automático do sistema OEM Sales.")
+	m.Attach(attachmentPath)
+
+	d := gomail.NewDialer(smtpHost, smtpPort, emailFrom, emailPass)
+
+	// Envio
+	if err := d.DialAndSend(m); err != nil {
+		log.Println("❌ Erro ao enviar e-mail:", err)
+	} else {
+		log.Println("📧 E-mail de backup enviado com sucesso para", emailTo)
+	}
+}
+
+// --- FUNÇÃO AUXILIAR PARA GERAR A STRUCT (Reutilizável) ---
+func generateBackupData() (BackupData, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	fullBackup := BackupData{
@@ -30,27 +119,33 @@ func DownloadBackup(c *fiber.Ctx) error {
 		Data:      make(map[string][]bson.M),
 	}
 
-	// 1. Itera sobre cada coleção e pega todos os dados
 	for _, colName := range collectionsToBackup {
 		cursor, err := Db.Collection(colName).Find(ctx, bson.M{})
 		if err != nil {
-			return c.Status(500).JSON(fiber.Map{"error": "Erro ao ler coleção " + colName})
+			return fullBackup, err
 		}
 
 		var docs []bson.M
 		if err = cursor.All(ctx, &docs); err != nil {
-			return c.Status(500).JSON(fiber.Map{"error": "Erro ao decodificar " + colName})
+			return fullBackup, err
 		}
-
 		fullBackup.Data[colName] = docs
 	}
+	return fullBackup, nil
+}
 
-	// 2. Define o nome do arquivo com data
-	filename := fmt.Sprintf("backup_oem_%s.json", time.Now().Format("2006-01-02_15-04"))
+// --- DOWNLOAD MANUAL (Rota API) ---
+func DownloadBackup(c *fiber.Ctx) error {
+	data, err := generateBackupData()
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Erro ao gerar dados"})
+	}
+
+	filename := fmt.Sprintf("backup_manual_%s.json", time.Now().Format("2006-01-02_15-04"))
 	c.Set("Content-Disposition", "attachment; filename="+filename)
 	c.Set("Content-Type", "application/json")
 
-	return c.JSON(fullBackup)
+	return c.JSON(data)
 }
 
 // --- RESTAURAR BACKUP (Upload) ---
@@ -73,12 +168,12 @@ func RestoreBackup(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": "Arquivo inválido ou corrompido"})
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
 	// 3. Processar cada coleção
 	for colName, docs := range backup.Data {
-		// Pular coleções desconhecidas por segurança
+		// Validação de segurança
 		valid := false
 		for _, v := range collectionsToBackup {
 			if v == colName {
@@ -92,40 +187,35 @@ func RestoreBackup(c *fiber.Ctx) error {
 
 		collection := Db.Collection(colName)
 
-		// A: Limpar coleção atual (Restore completo)
+		// Limpar e Restaurar
 		collection.Drop(ctx)
 
 		if len(docs) == 0 {
 			continue
 		}
 
-		// B: Converter Tipos (JSON transformou ObjectID e Date em String)
 		var interfaces []interface{}
 		for _, doc := range docs {
-			// Corrige _id
+			// Correção de _id
 			if idStr, ok := doc["_id"].(string); ok {
 				if oid, err := primitive.ObjectIDFromHex(idStr); err == nil {
 					doc["_id"] = oid
 				}
 			}
-
-			// Corrige campos de Data conhecidos
+			// Correção de Datas
 			dateFields := []string{"start_date", "created_at", "CreatedAt", "timestamp"}
 			for _, field := range dateFields {
 				if val, ok := doc[field].(string); ok {
-					// Tenta parsear datas ISO do JSON
 					if parsed, err := time.Parse(time.RFC3339, val); err == nil {
 						doc[field] = parsed
 					}
 				}
 			}
-
 			interfaces = append(interfaces, doc)
 		}
 
-		// C: Inserir dados restaurados
 		if _, err := collection.InsertMany(ctx, interfaces); err != nil {
-			return c.Status(500).JSON(fiber.Map{"error": "Erro ao inserir dados em " + colName})
+			return c.Status(500).JSON(fiber.Map{"error": "Erro ao inserir em " + colName})
 		}
 	}
 
