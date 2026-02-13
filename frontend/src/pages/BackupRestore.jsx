@@ -31,7 +31,7 @@ const BackupRestore = () => {
         // Verifica cabeçalho customizado do Backend sobre o envio de e-mail
         const emailStatus = response.headers.get("X-Email-Status");
         const emailMsg = emailStatus === 'sent' 
-            ? '✅ Cópia enviada para backup@oemcontelados.com.br' 
+            ? '✅ Cópia enviada para backup@oemcongelados.com.br' 
             : '⚠️ Falha ao enviar e-mail (apenas download local)';
 
         // Download do arquivo

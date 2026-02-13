@@ -123,21 +123,28 @@ func saveBackupLocally(data BackupData, prefix string) (string, error) {
 
 // --- ENVIO DE EMAIL (SMTP) ---
 func sendBackupEmail(attachmentPath string) error {
-	// --- CREDENCIAIS CORRIGIDAS ---
-	emailFrom := "backup@oemcongelados.com.br"
-	emailTo := "backup@oemcongelados.com.br"
+	// Pega do arquivo .env ou variáveis de sistema
+	emailFrom := os.Getenv("SMTP_EMAIL")
+	if emailFrom == "" {
+		// Fallback caso esqueça de configurar o .env (apenas o email, senha NUNCA)
+		emailFrom = "backup@oemcongelados.com.br"
+	}
+	emailTo := emailFrom
 
-	// SENHA CORRIGIDA (C maiúsculo)
-	emailPass := "#Copia@2026"
+	// Pega SENHA do arquivo .env (CRÍTICO PARA SEGURANÇA)
+	emailPass := os.Getenv("SMTP_PASS")
+	if emailPass == "" {
+		return fmt.Errorf("senha SMTP não configurada no arquivo .env")
+	}
 
 	smtpHost := "smtp.hostinger.com"
-	smtpPort := 465 // STARTTLS (Mais compatível com Go)
+	smtpPort := 587 // STARTTLS
 
 	m := gomail.NewMessage()
 	m.SetHeader("From", emailFrom)
 	m.SetHeader("To", emailTo)
 	m.SetHeader("Subject", fmt.Sprintf("Backup do Sistema - %s", time.Now().Format("02/01/2006 15:04")))
-	m.SetBody("text/plain", "Olá, Este é um backup automátio. Segue em anexo o arquivo de backup do App Fechamento de Viagem.")
+	m.SetBody("text/plain", "Segue em anexo o arquivo de backup (versão segura sem senhas).")
 	m.Attach(attachmentPath)
 
 	d := gomail.NewDialer(smtpHost, smtpPort, emailFrom, emailPass)
@@ -169,6 +176,15 @@ func generateBackupData() (BackupData, error) {
 		if err = cursor.All(ctx, &docs); err != nil {
 			return fullBackup, err
 		}
+
+		// --- SEGURANÇA: REMOVER SENHAS DOS USUÁRIOS ---
+		if colName == "users" {
+			for _, doc := range docs {
+				delete(doc, "password") // Remove o campo password do backup
+			}
+		}
+		// ---------------------------------------------
+
 		fullBackup.Data[colName] = docs
 	}
 	return fullBackup, nil

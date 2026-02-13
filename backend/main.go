@@ -12,6 +12,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
+	"github.com/joho/godotenv" // <--- BIBLIOTECA NOVA
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
@@ -50,14 +51,17 @@ func connectDB() {
 }
 
 func main() {
-	// 1. Conecta ao Banco
+	// --- CARREGA O ARQUIVO .ENV (NOVO) ---
+	// Isso faz o Go ler as senhas do arquivo .env como se fossem do sistema
+	if err := godotenv.Load(); err != nil {
+		fmt.Println("ℹ️  Nenhum arquivo .env encontrado (usando variáveis de ambiente do sistema)")
+	}
+
 	connectDB()
 
-	// 2. Inicia o Agendador de Backup (NOVO - Passo 3)
-	// Isso garante que o Cron inicie junto com o servidor
+	// Inicia Agendador
 	controllers.StartBackupScheduler()
 
-	// 3. Inicia o Fiber (API)
 	app := fiber.New()
 
 	frontendURL := os.Getenv("FRONTEND_URL")
@@ -77,28 +81,27 @@ func main() {
 	// Rotas Protegidas
 	api := app.Group("/api", middleware.Protected())
 
-	// --- Viagens ---
+	// Viagens
 	api.Post("/trips", controllers.CreateTrip)
 	api.Get("/trips", controllers.GetAllTrips)
 	api.Get("/trips/:id", controllers.GetTripByID)
 	api.Put("/trips/:id", controllers.UpdateTrip)
 
-	// Ações de Viagem
 	api.Patch("/trips/:id/approve", controllers.ApproveTrip)
 	api.Patch("/trips/:id/reopen", controllers.ReopenTrip)
 	api.Delete("/trips/:id", controllers.DeleteTrip)
 
-	// --- Notificações ---
+	// Notificações
 	api.Get("/notifications", controllers.CheckNotifications)
 	api.Post("/notifications/dismiss", controllers.DismissNotifications)
 
-	// --- Usuários ---
-	api.Post("/register", controllers.RegisterUser)  // Criar
-	api.Get("/users", controllers.GetUsers)          // Listar
-	api.Put("/users/:id", controllers.UpdateUser)    // Editar
-	api.Delete("/users/:id", controllers.DeleteUser) // Excluir
+	// Usuários
+	api.Post("/register", controllers.RegisterUser)
+	api.Get("/users", controllers.GetUsers)
+	api.Put("/users/:id", controllers.UpdateUser)
+	api.Delete("/users/:id", controllers.DeleteUser)
 
-	// --- Cadastros Gerais ---
+	// Cadastros
 	api.Get("/drivers", controllers.GetDrivers)
 	api.Post("/drivers", controllers.SaveDriver)
 	api.Get("/vehicles", controllers.GetVehicles)
@@ -106,7 +109,7 @@ func main() {
 	api.Get("/routes", controllers.GetRoutes)
 	api.Post("/routes", controllers.SaveRoute)
 
-	// --- Backup ---
+	// Backup
 	api.Get("/backup", controllers.DownloadBackup)
 	api.Post("/restore", controllers.RestoreBackup)
 
