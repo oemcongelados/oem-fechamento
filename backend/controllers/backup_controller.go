@@ -137,7 +137,7 @@ func sendBackupEmail(attachmentPath string) error {
 	m.SetHeader("From", emailFrom)
 	m.SetHeader("To", emailTo)
 	m.SetHeader("Subject", fmt.Sprintf("Backup do Sistema - %s", time.Now().Format("02/01/2006 15:04")))
-	m.SetBody("text/plain", "Segue em anexo o arquivo de backup.")
+	m.SetBody("text/plain", "Olá, Este é um backup automátio. Segue em anexo o arquivo de backup do App Fechamento de Viagem.")
 	m.Attach(attachmentPath)
 
 	d := gomail.NewDialer(smtpHost, smtpPort, emailFrom, emailPass)
