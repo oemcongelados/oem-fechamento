@@ -81,7 +81,6 @@ func DownloadBackup(c *fiber.Ctx) error {
 	emailErr := sendBackupEmail(filepath)
 
 	if emailErr != nil {
-		// Loga o erro exato no terminal da VPS para ajudar no debug
 		log.Printf("❌ ERRO SMTP: %v\n", emailErr)
 		c.Set("X-Email-Status", "failed")
 	} else {
@@ -124,13 +123,15 @@ func saveBackupLocally(data BackupData, prefix string) (string, error) {
 
 // --- ENVIO DE EMAIL (SMTP) ---
 func sendBackupEmail(attachmentPath string) error {
-	// --- CORREÇÃO DO DOMÍNIO E PORTA ---
-	emailFrom := "backup@oemcongelados.com.br" // Corrigido de 'contelados' para 'congelados'
+	// --- CREDENCIAIS CORRIGIDAS ---
+	emailFrom := "backup@oemcongelados.com.br"
 	emailTo := "backup@oemcongelados.com.br"
-	emailPass := "#copia@2026"
+
+	// SENHA CORRIGIDA (C maiúsculo)
+	emailPass := "#Copia@2026"
 
 	smtpHost := "smtp.hostinger.com"
-	smtpPort := 587 // Alterado para 587 (STARTTLS) que é mais compatível com Go
+	smtpPort := 465 // STARTTLS (Mais compatível com Go)
 
 	m := gomail.NewMessage()
 	m.SetHeader("From", emailFrom)
