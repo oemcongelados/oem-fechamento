@@ -1,0 +1,25 @@
+# --- SISTEMA E IDE ---
+.DS_Store
+Thumbs.db
+.vscode/
+*.log
+
+# --- FRONTEND (React) ---
+frontend/node_modules/
+frontend/dist/
+frontend/build/
+frontend/.env.local
+
+# --- BACKEND (Go) ---
+# Ignorar arquivo de senhas (CRÍTICO)
+backend/.env
+
+# Ignorar executável compilado
+backend/server
+backend/server.exe
+
+# Ignorar pasta de backups locais (JSONs)
+backend/backups/
+
+# Ignorar pasta de uploads (se houver imagens salvas localmente)
+backend/uploads/
