@@ -46,8 +46,27 @@ const ManageTrips = () => {
   const handleApprove = async (id) => {
     if (!id) return; // Proteção contra ID nulo
 
-    const romaneio = window.prompt("ATENÇÃO: Aprovar bloqueará edições.\n\nPor favor, insira o número do ROMANEIO para confirmar:");
-    if (romaneio === null) return;
+    // 1. Localiza a viagem específica na lista para verificar o romaneio
+    const currentTrip = trips.find(t => (t.id === id || t._id === id));
+    
+    let romaneioToSend = '';
+
+    // 2. Verifica se já existe romaneio preenchido
+    if (currentTrip && currentTrip.romaneio && currentTrip.romaneio.toString().trim() !== '') {
+        // CASO A: Já tem romaneio, pede apenas confirmação
+        const confirm = window.confirm(
+            `ATENÇÃO: Aprovar bloqueará edições.\n\n` +
+            `O Romaneio já está registrado como: ${currentTrip.romaneio}\n\n` +
+            `Deseja confirmar a aprovação?`
+        );
+        if (!confirm) return;
+        romaneioToSend = currentTrip.romaneio;
+    } else {
+        // CASO B: Não tem romaneio, pede para digitar
+        const input = window.prompt("ATENÇÃO: Aprovar bloqueará edições.\n\nPor favor, insira o número do ROMANEIO para confirmar:");
+        if (input === null) return; // Cancelou
+        romaneioToSend = input;
+    }
 
     const token = localStorage.getItem('oem_token');
     try {
@@ -57,7 +76,7 @@ const ManageTrips = () => {
                 'Authorization': `Bearer ${token}`,
                 'Content-Type': 'application/json' 
             },
-            body: JSON.stringify({ romaneio: romaneio })
+            body: JSON.stringify({ romaneio: romaneioToSend })
         });
 
         if (res.ok) {
